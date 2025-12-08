@@ -1,0 +1,223 @@
+# ~/.config/aerospace/aerospace.toml
+# AeroSpace 本体の設定をまとめ、ウィンドウ管理とショートカットを制御する。
+# SketchyBar 連携やワークスペース運用を統一するために存在する。
+# 関連ファイル: ~/.config/sketchybar/sketchybarrc, ~/.config/sketchybar/plugins/aerospace.sh, ~/.config/sketchybar/plugins/update_workspace_icons.sh
+# Place a copy of this config to ~/.aerospace.toml
+# After that, you can edit ~/.aerospace.toml to your liking
+
+# You can use it to add commands that run after login to macOS user session.
+# 'start-at-login' needs to be 'true' for 'after-login-command' to work
+# Available commands: https://nikitabobko.github.io/AeroSpace/commands
+after-login-command = []
+
+# You can use it to add commands that run after AeroSpace startup.
+# 'after-startup-command' is run after 'after-login-command'
+# Available commands : https://nikitabobko.github.io/AeroSpace/commands
+# .config/aerospace/aeospace.toml
+after-startup-command = ['exec-and-forget borders']
+
+# Start AeroSpace at login
+start-at-login = true 
+
+# Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+
+# See: https://nikitabobko.github.io/AeroSpace/guide#layouts
+# The 'accordion-padding' specifies the size of accordion padding
+# You can set 0 to disable the padding feature
+accordion-padding = 0
+
+# Possible values: tiles|accordion
+# タイル固定
+default-root-container-layout = 'tiles'
+
+# Possible values: horizontal|vertical|auto
+# 'auto' means: wide monitor (anything wider than high) gets horizontal orientation,
+#               tall monitor (anything higher than wide) gets vertical orientation
+default-root-container-orientation = 'auto'
+
+# Mouse warp はクリック操作と相性が悪いため無効化（キーボード操作時のみ必要なら別途スクリプト化する）
+# See https://nikitabobko.github.io/AeroSpace/guide#on-focus-changed-callbacks
+# See https://nikitabobko.github.io/AeroSpace/commands#move-mouse
+# Fallback value (if you omit the key): on-focused-monitor-changed = []
+on-focused-monitor-changed = []
+
+# You can effectively turn off macOS "Hide application" (cmd-h) feature by toggling this flag
+# Useful if you don't use this macOS feature, but accidentally hit cmd-h or cmd-alt-h key
+# Also see: https://nikitabobko.github.io/AeroSpace/goodies#disable-hide-app
+automatically-unhide-macos-hidden-apps = true 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sketchybar 連携（トップレベル。on-window-detected の外に置くこと）
+exec-on-workspace-change = ['/bin/bash', '-c', 'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE && ~/.config/sketchybar/plugins/update_workspace_icons.sh']
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Possible values: (qwerty|dvorak)
+# See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
+[key-mapping]
+preset = 'qwerty'
+
+# Gaps between windows (inner-*) and between monitor edges (outer-*).
+[gaps]
+inner.horizontal = 12
+inner.vertical   = 12
+
+# 定数でいいやつは数字だけ
+outer.left   = 12
+outer.right  = 12
+outer.bottom = 12
+
+# モニタ別にtopだけ変える。配列内は「monitor.パターン = 値」だけを持つテーブル
+outer.top = [
+  { monitor."LG HDR QHD" = 44 },
+  12
+]
+
+# 'main' binding mode declaration
+# See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
+# 'main' binding mode must be always presented
+# Fallback value (if you omit the key): mode.main.binding = {}
+[mode.main.binding]
+
+# App shortcuts
+alt-d = 'exec-and-forget open -a /Applications/Discord.app'
+alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
+alt-t = 'exec-and-forget open -a /Applications/kitty.app'
+alt-m = 'exec-and-forget open -a /Applications/Mattermost.app'
+alt-v = 'exec-and-forget open -a /Applications/Vivaldi\ Snapshot.app'
+alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
+
+# 均等化
+alt-b = 'balance-sizes'
+
+# 次/前のワークスペースへ
+alt-n = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused | aerospace workspace --wrap-around next"'
+alt-p = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused | aerospace workspace --wrap-around prev"'
+
+# アプリを移動
+alt-shift-n = 'move-node-to-workspace --wrap-around --focus-follows-window next'
+alt-shift-p = 'move-node-to-workspace --wrap-around --focus-follows-window prev'
+
+# タイル内の向き変更のみ許可（URL の誤記を修正）
+# See: https://nikitabobko.github.io/AeroSpace/commands#layout
+alt-e = 'layout tiles horizontal vertical'
+# 禁止: alt-comma = 'layout accordion horizontal vertical'
+
+alt-f = 'fullscreen'
+alt-y = ['focus right', 'join-with down', 'layout tiles horizontal']
+
+# See: https://nikitabobko.github.io/AeroSpace/commands#focus
+alt-h = 'focus left'
+alt-j = 'focus down'
+alt-k = 'focus up'
+alt-l = 'focus right'
+
+# See: https://nikitabobko.github.io/AeroSpace/commands#move
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-l = 'move right'
+
+# See: https://nikitabobko.github.io/AeroSpace/commands#resize
+alt-shift-minus = 'resize smart -50'
+alt-shift-equal = 'resize smart +50'
+
+# See: https://nikitabobko.github.io/AeroSpace/commands#workspace
+alt-1 = 'workspace 1'
+alt-2 = 'workspace 2'
+alt-3 = 'workspace 3'
+alt-4 = 'workspace 4'
+alt-5 = 'workspace 5'
+alt-6 = 'workspace 6'
+alt-7 = 'workspace 7'
+
+# See: https://nikitabobko.github.io/AeroSpace/commands#move-node-to-workspace
+alt-shift-1 = 'move-node-to-workspace 1'
+alt-shift-2 = 'move-node-to-workspace 2'
+alt-shift-3 = 'move-node-to-workspace 3'
+alt-shift-4 = 'move-node-to-workspace 4'
+alt-shift-5 = 'move-node-to-workspace 5'
+alt-shift-6 = 'move-node-to-workspace 6'
+alt-shift-7 = 'move-node-to-workspace 7'
+
+# See: https://nikitabobko.github.io/AeroSpace/commands#workspace-back-and-forth
+alt-tab = 'workspace-back-and-forth'
+# See: https://nikitabobko.github.io/AeroSpace/commands#move-workspace-to-monitor
+alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
+
+# See: https://nikitabobko.github.io/AeroSpace/commands#mode
+alt-shift-semicolon = 'mode service'
+
+# 'service' binding mode declaration.
+# See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
+[mode.service.binding]
+esc = ['reload-config', 'mode main']
+r = ['flatten-workspace-tree', 'mode main'] # reset layout
+# 禁止: f = ['layout floating tiling', 'mode main']  # 浮遊切替を封じる
+backspace = ['close-all-windows-but-current', 'mode main']
+
+# sticky is not yet supported https://github.com/nikitabobko/AeroSpace/issues/2
+# s = ['layout sticky tiling', 'mode main']
+
+alt-shift-h = ['join-with left', 'mode main']
+alt-shift-j = ['join-with down', 'mode main']
+alt-shift-k = ['join-with up', 'mode main']
+alt-shift-l = ['join-with right', 'mode main']
+
+t = ['layout tiling', 'mode main']
+
+# ─────────────────────────────────────────────────────────────────────────────
+# まず全新規ウィンドウを強制タイル化（以降のルールも継続）
+[[on-window-detected]]
+check-further-callbacks = true
+run = ['layout tiling']
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Default space
+[[on-window-detected]]
+if.app-id = 'com.brave.Browser'
+run = ['move-node-to-workspace 1']
+
+[[on-window-detected]]
+if.app-id = 'com.brave.Browser.app.adcclpceapdbhchilkbngkehpppaefko'
+run = ['move-node-to-workspace 1']
+
+[[on-window-detected]]
+if.app-id = 'com.mitchellh.ghostty'
+run = ['move-node-to-workspace 2']
+
+[[on-window-detected]]
+if.app-id = 'com.todesktop.230313mzl4w4u92'
+run = ['move-node-to-workspace 3']
+
+[[on-window-detected]]
+if.app-id = 'notion.id'
+run = ['move-node-to-workspace 4']
+
+[[on-window-detected]]
+if.app-id = 'md.obsidian'
+run = ['move-node-to-workspace 4']
+
+[[on-window-detected]]
+if.app-id = 'com.tinyspeck.slackmacgap'
+run = ['move-node-to-workspace 5']
+
+[[on-window-detected]]
+if.app-id = 'com.hnc.Discord'
+run = ['move-node-to-workspace 5']
+
+[[on-window-detected]]
+if.app-id = 'com.adobe.PremierePro.24'
+run = ['move-node-to-workspace 6']
+
+# force certain workspaces to certain monitors
+[workspace-to-monitor-force-assignment]
+1 = 'main'      
+2 = 'main'      
+3 = 'main'      
+4 = 'main'      
+5 = 'main'
+6 = 'secondary'
+7 = 'secondary'
+
