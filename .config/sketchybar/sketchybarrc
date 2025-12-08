@@ -1,0 +1,449 @@
+# ./sketchybarrc
+# Configures SketchyBar for Aerospace-driven workspace tiles.
+# Exists to keep the bar minimal while reflecting active workspaces.
+# Related files: plugins/aerospace.sh, plugins/update_workspace_icons.sh, plugins/workspace_events.sh, plugins/icon_map_fn.sh
+
+# A simple sketchybar config for aerospace users to get started with
+# Not too different from the base starting config!
+
+PLUGIN_DIR="$CONFIG_DIR/plugins"
+ITEM_DIR="$CONFIG_DIR/items" 
+export MIN_WORKSPACE=1
+
+# デフォルトのワークスペース上限。環境変数WORKSPACE_RANGE_MAXを9にすれば即座に1-9へ戻せる。
+export MAX_WORKSPACE_DEFAULT=7
+export MAX_WORKSPACE="${WORKSPACE_RANGE_MAX:-$MAX_WORKSPACE_DEFAULT}"
+
+WALLPAPER_PRIMARY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/wallhaven-rqq3gm.png"
+WALLPAPER_KITTY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/kitty.png"
+PREVIEW_DIR="$CONFIG_DIR/cache/wallpaper_previews"
+PREVIEW_W=480
+PREVIEW_H=270
+mkdir -p "$PREVIEW_DIR"
+WALLPAPER_PRIMARY_PREVIEW="$PREVIEW_DIR/wallhaven-rqq3gm.preview.png"
+WALLPAPER_KITTY_PREVIEW="$PREVIEW_DIR/kitty.preview.png"
+
+# オリジナルが新しければプレビューを更新
+if [ "$WALLPAPER_PRIMARY" -nt "$WALLPAPER_PRIMARY_PREVIEW" ]; then
+  "$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_PRIMARY" "$WALLPAPER_PRIMARY_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
+fi
+
+if [ "$WALLPAPER_KITTY" -nt "$WALLPAPER_KITTY_PREVIEW" ]; then
+  "$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_KITTY" "$WALLPAPER_KITTY_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
+fi
+
+##### Bar Appearance #####
+# Configuring the general appearance of the bar.
+# These are only some of the options available. For all options see:
+# https://felixkratz.github.io/SketchyBar/config/bar
+# If you are looking for other colors, see the color picker:
+# https://felixkratz.github.io/SketchyBar/config/tricks#color-picker
+
+sketchybar --bar position=top height=40 blur_radius=30 color=0x40000000
+
+##### Changing Defaults #####
+# We now change some default values, which are applied to all further items.
+# For a full list of all available item properties see:
+# https://felixkratz.github.io/SketchyBar/config/items
+
+default=(
+  padding_left=5
+  padding_right=5
+  icon.font="Hack Nerd Font:Bold:10.0"
+  label.font="SF Pro:Semibold:10.0"
+  icon.color=0xffffffff
+  label.color=0xffffffff
+  icon.padding_left=2
+  icon.padding_right=2
+  label.padding_left=2
+  label.padding_right=2
+  updates=on
+)
+sketchybar --default "${default[@]}"
+
+##### Adding aeropsace layouts #####
+
+# Add the aerospace_workspace_change event we specified in aerospace.toml
+sketchybar --add event aerospace_workspace_change
+sketchybar --add event volume_change
+
+# Add a fixed strip of workspaces 1 through $MAX_WORKSPACE
+workspace_min=$MIN_WORKSPACE
+workspace_max=$MAX_WORKSPACE
+
+for sid in $(seq $workspace_min $workspace_max); do
+  sketchybar --add item space.$sid left \
+    --subscribe space.$sid aerospace_workspace_change \
+    --set space.$sid \
+      drawing=on \
+      background.drawing=off \
+      padding_left=8 \
+      padding_right=2 \
+      icon="$sid" \
+      icon.font="SF Pro:Semibold:16.0" \
+      icon.color=0xffffffff \
+      icon.padding_left=0 \
+      icon.padding_right=4 \
+      label="" \
+      label.drawing=off \
+      click_script="aerospace workspace $sid" \
+      script="$CONFIG_DIR/plugins/aerospace.sh $sid"
+
+  for icon_slot in 1 2 3 4; do
+    sketchybar --add item space.$sid.icon${icon_slot} left \
+      --set space.$sid.icon${icon_slot} \
+        drawing=off \
+        background.drawing=off \
+        padding_left=3 \
+        padding_right=3 \
+        width=24 \
+        icon.drawing=off \
+        icon.width=16 \
+        icon.background.drawing=off \
+        icon.background.height=16 \
+        icon.background.y_offset=0 \
+        icon.background.corner_radius=3 \
+        icon.background.image.scale=0.8 \
+        label="" \
+        label.drawing=off \
+        click_script="aerospace workspace $sid"
+  done
+
+  sketchybar --add item space.$sid.more left \
+    --set space.$sid.more \
+      drawing=off \
+      padding_left=3 \
+      padding_right=6 \
+      background.drawing=off \
+      width=24 \
+      icon.drawing=off \
+      label="" \
+      label.drawing=off \
+      label.font="SF Pro:Semibold:12.0" \
+      label.color=0x99FFFFFF \
+      label.padding_left=2 \
+      label.padding_right=2 \
+      click_script="aerospace workspace $sid"
+
+  if [ "$sid" -lt $workspace_max ]; then
+    sketchybar --add item space.$sid.separator left \
+      --set space.$sid.separator \
+        drawing=on \
+        background.drawing=off \
+        padding_left=8 \
+        padding_right=8 \
+        icon.drawing=off \
+        label="|" \
+        label.drawing=on \
+        label.font="SF Pro:Semibold:13.0" \
+        label.color=0x66FFFFFF
+  fi
+done
+
+# 不可視アイテムを用意してワークスペースアイコン更新を1回に集約する。
+sketchybar --add item workspace.refresh center \
+  --set workspace.refresh \
+    drawing=off \
+    script="$CONFIG_DIR/plugins/workspace_events.sh" \
+  --subscribe workspace.refresh \
+    window_created \
+    window_destroyed \
+    application_launched \
+    application_terminated \
+    front_app_switched \
+    window_focused \
+    aerospace_workspace_change
+
+# Populate workspace tiles with the latest icons once on startup.
+sh "$PLUGIN_DIR/update_workspace_icons.sh"
+
+
+
+
+##### Adding Right Items #####
+# In the same way as the left items we can add items to the right side.
+# Additional position (e.g. center) are available, see:
+# https://felixkratz.github.io/SketchyBar/config/items#adding-items-to-sketchybar
+
+# Some items refresh on a fixed cycle, e.g. the clock runs its script once
+# every 10s. Other gititems respond to events they subscribe to, e.g. the
+# volume.sh script is only executed once an actual change in system audio
+# volume is registered. More info about the event system can be found here:
+# https://felixkratz.github.io/SketchyBar/config/events
+sketchybar --add item avatar right \
+  --set avatar                                   \
+      drawing=on                                 \
+      icon=""                                    \
+      icon.drawing=on                            \
+      icon.padding_left=0                        \
+      icon.padding_right=0                       \
+      icon.background.drawing=on                 \
+      icon.background.image="$PLUGIN_DIR/user3.png" \
+      icon.background.image.scale=0.0125            \
+      icon.background.width=16                   \
+      icon.background.height=16                  \
+      icon.background.corner_radius=8            \
+      icon.background.y_offset=0                 \
+      click_script="sketchybar --set avatar popup.drawing=on" \
+      popup.background.color=0xF2000000 \
+      popup.background.blur_radius=30 \
+      popup.background.corner_radius=8 \
+      popup.background.padding_left=12 \
+      popup.background.padding_right=12 \
+      popup.background.padding_top=10 \
+      popup.background.padding_bottom=10 \
+      popup.background.click_script="sketchybar --set avatar popup.drawing=off" \
+      popup.align=right \
+      popup.y_offset=6 \
+      popup.height=32 \
+      # ここで十分な横幅を確保して時計テキストとの重なりを防ぐ
+      padding_left=8                              \
+      padding_right=8                             \
+      width=28                                    \
+      label.drawing=off                          \
+      label.padding_left=0                       \
+      label.padding_right=0
+
+# プレビュー付きの壁紙選択ポップアップ
+sketchybar --add item avatar.wallpaper_primary_preview popup.avatar \
+  --set avatar.wallpaper_primary_preview \
+    icon.drawing=off \
+    label="" \
+    background.drawing=on \
+    background.image="$WALLPAPER_PRIMARY_PREVIEW" \
+    background.image.scale=1 \
+    background.width=240 \
+    background.height=135 \
+    background.corner_radius=10 \
+    background.padding_left=6 \
+    background.padding_right=6 \
+    background.padding_top=6 \
+    background.padding_bottom=4 \
+    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_PRIMARY\" avatar" \
+    drawing=on
+
+sketchybar --add item avatar.wallpaper_primary popup.avatar \
+  --set avatar.wallpaper_primary \
+    icon="󰸉" \
+    label="wallhaven" \
+    icon.drawing=on \
+    label.drawing=on \
+    icon.padding_left=4 \
+    icon.padding_right=6 \
+    label.padding_left=2 \
+    label.padding_right=6 \
+    label.width=240 \
+    label.align=center \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_PRIMARY\" avatar" \
+    drawing=on
+
+sketchybar --add item avatar.wallpaper_kitty_preview popup.avatar \
+  --set avatar.wallpaper_kitty_preview \
+    icon.drawing=off \
+    label="" \
+    background.drawing=on \
+    background.image="$WALLPAPER_KITTY_PREVIEW" \
+    background.image.scale=1 \
+    background.width=240 \
+    background.height=135 \
+    background.corner_radius=10 \
+    background.padding_left=6 \
+    background.padding_right=6 \
+    background.padding_top=6 \
+    background.padding_bottom=4 \
+    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_KITTY\" avatar" \
+    drawing=on
+
+sketchybar --add item avatar.wallpaper_kitty popup.avatar \
+  --set avatar.wallpaper_kitty \
+    icon="󰄛" \
+    label="kitty" \
+    icon.drawing=on \
+    label.drawing=on \
+    icon.padding_left=4 \
+    icon.padding_right=6 \
+    label.padding_left=2 \
+    label.padding_right=6 \
+    label.width=240 \
+    label.align=center \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_KITTY\" avatar" \
+    drawing=on
+
+sketchybar --add item avatar.popup_close popup.avatar \
+  --set avatar.popup_close \
+    icon="󰅖" \
+    label="閉じる" \
+    icon.drawing=on \
+    label.drawing=on \
+    icon.padding_left=4 \
+    icon.padding_right=6 \
+    label.padding_left=2 \
+    label.padding_right=6 \
+    background.drawing=off \
+    click_script="sketchybar --set avatar popup.drawing=off" \
+    drawing=on
+
+sketchybar --add item clock right \
+  --set clock update_freq=1 script="$PLUGIN_DIR/clock.sh" \
+             width=150 \
+             padding_left=4 \
+             padding_right=4 \
+             label.width=150 \
+             label.align=center \
+             margin_left=0 \
+             margin_right=0 \
+  --add item volume right \
+  --set volume script="$PLUGIN_DIR/volume.sh" \
+             padding_left=4 \
+             padding_right=4 \
+             margin_left=0 \
+             margin_right=0 \
+  --subscribe volume volume_change \
+  --add item battery right \
+  --set battery update_freq=120 script="$PLUGIN_DIR/battery.sh" \
+             padding_left=4 \
+             padding_right=4 \
+             margin_left=0 \
+             margin_right=0 \
+  --subscribe battery system_woke power_source_change \
+  --add item network right \
+  --set network update_freq=1 script="$PLUGIN_DIR/network.sh" \
+             padding_left=4 \
+             padding_right=4 \
+             margin_left=0 \
+             margin_right=0 \
+  --subscribe network network_change \
+
+sketchybar --add item ram right \
+   --set ram script="$PLUGIN_DIR/ram_min.sh" \
+              update_freq=15 \
+              icon="󰍛" \
+              padding_left=4 \
+              padding_right=4 \
+              margin_left=0 \
+              margin_right=0
+
+##### External Storage with Popup #####
+sketchybar --add item disk right \
+   --set disk script="$PLUGIN_DIR/external_storage.sh" \
+              update_freq=5 \
+              updates=on \
+              icon="󰋊" \
+              label="--°C" \
+              padding_left=4 \
+              padding_right=4 \
+              margin_left=0 \
+              margin_right=0 \
+              click_script="sketchybar --set disk popup.drawing=on" \
+              popup.background.color=0xF2000000 \
+              popup.background.blur_radius=30 \
+              popup.background.corner_radius=8 \
+              popup.background.padding_left=10 \
+              popup.background.padding_right=10 \
+              popup.background.padding_top=10 \
+              popup.background.padding_bottom=10 \
+              popup.background.click_script="sketchybar --set disk popup.drawing=off" \
+              popup.align=right \
+              popup.y_offset=5 \
+              popup.height=32 \
+  --subscribe disk volume_change
+
+for i in $(seq 1 4); do
+  sketchybar --add item disk.entry${i} popup.disk \
+    --set disk.entry${i} \
+      icon.drawing=on \
+      icon.padding_left=4 \
+      icon.padding_right=4 \
+      label.drawing=on \
+      label.padding_left=4 \
+      label.padding_right=4 \
+      background.drawing=off \
+      click_script="sketchybar --set disk popup.drawing=off" \
+      drawing=off
+done
+
+sketchybar --add item disk.close popup.disk \
+  --set disk.close \
+    icon="󰅖" \
+    label="閉じる" \
+    icon.drawing=on \
+    label.drawing=on \
+    icon.padding_left=4 \
+    icon.padding_right=4 \
+    label.padding_left=4 \
+    label.padding_right=4 \
+    background.drawing=off \
+    click_script="sketchybar --set disk popup.drawing=off" \
+    drawing=on
+
+##### Adding Tasks Item with Popup #####
+sketchybar --add item tasks right \
+   --set tasks script="$PLUGIN_DIR/tasks.sh" \
+              update_freq=3600 \
+              icon="󰓾" \
+              label="0" \
+              padding_left=4 \
+              padding_right=4 \
+              margin_left=0 \
+              margin_right=0 \
+              click_script="sketchybar --set tasks popup.drawing=on" \
+              popup.background.color=0xF2000000 \
+              popup.background.blur_radius=30 \
+              popup.background.corner_radius=8 \
+              popup.background.padding_left=10 \
+              popup.background.padding_right=10 \
+              popup.background.padding_top=10 \
+              popup.background.padding_bottom=10 \
+              popup.background.click_script="sketchybar --set tasks popup.drawing=off" \
+              popup.align=center \
+              popup.y_offset=5 \
+              popup.height=30
+
+# Add popup task items (dynamically managed by tasks.sh)
+for i in $(seq 1 10); do
+  sketchybar --add item task.$i popup.tasks \
+    --set task.$i \
+      icon.drawing=on \
+      icon.padding_left=4 \
+      icon.padding_right=4 \
+      label.drawing=on \
+      label.padding_left=4 \
+      label.padding_right=4 \
+      background.drawing=off \
+      click_script="sketchybar --set tasks popup.drawing=off" \
+      drawing=off
+done
+
+# Add reload and close buttons to popup
+sketchybar --add item task.reload popup.tasks \
+  --set task.reload \
+    icon="󰑐" \
+    label="再読み込み" \
+    icon.drawing=on \
+    label.drawing=on \
+    icon.padding_left=4 \
+    icon.padding_right=4 \
+    label.padding_left=4 \
+    label.padding_right=4 \
+    background.drawing=off \
+    click_script="rm /tmp/sketchybar_tasks_cache && NAME=tasks $CONFIG_DIR/plugins/tasks.sh && sketchybar --set tasks popup.drawing=on" \
+    drawing=on
+
+sketchybar --add item task.close popup.tasks \
+  --set task.close \
+    icon="󰅖" \
+    label="閉じる" \
+    icon.drawing=on \
+    label.drawing=on \
+    icon.padding_left=4 \
+    icon.padding_right=4 \
+    label.padding_left=4 \
+    label.padding_right=4 \
+    background.drawing=off \
+    click_script="sketchybar --set tasks popup.drawing=off" \
+    drawing=on
+
+##### Force all scripts to run the first time (never do this in a script) #####
+sketchybar --update
