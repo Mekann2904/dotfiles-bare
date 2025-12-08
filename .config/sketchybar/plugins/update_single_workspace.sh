@@ -172,40 +172,45 @@ update_workspace_icons() {
 
 # メイン処理
 main() {
-  local target_workspace="$1"
+  local inputs=("$@")
+  local targets=()
   
-  log_debug "Script started with target: ${target_workspace:-all}"
-  
+  log_debug "Script started with targets: ${inputs[*]:-all}"
   perf_start
   
-  if [ -n "$target_workspace" ]; then
-    # 特定のワークスペースのみ更新
-    local normalized_ws
-    normalized_ws=$(normalize_ws "$target_workspace") || {
-      log_debug "Invalid workspace: $target_workspace - falling back to all workspaces"
-      target_workspace=""
-    }
-    
-    if [ -n "$normalized_ws" ] && ! is_supported_ws "$normalized_ws"; then
-      log_debug "Workspace $normalized_ws not in supported range ($MIN_WORKSPACE-$MAX_WORKSPACE) - falling back to all workspaces"
-      target_workspace=""
-    fi
+  # 引数があればすべて正規化して採用。無効値はスキップ。
+  if [ "${#inputs[@]}" -gt 0 ]; then
+    for arg in "${inputs[@]}"; do
+      local ws
+      ws=$(normalize_ws "$arg") || {
+        log_debug "Invalid workspace input: $arg"
+        continue
+      }
+      if is_supported_ws "$ws"; then
+        # 重複を排除
+        case " ${targets[*]} " in
+          *" $ws "*) ;; 
+          *) targets+=("$ws");;
+        esac
+      else
+        log_debug "Workspace $ws not in supported range ($MIN_WORKSPACE-$MAX_WORKSPACE)"
+      fi
+    done
   fi
   
-  if [ -n "$target_workspace" ] && [ -n "$normalized_ws" ]; then
-    # 特定のワークスペースのみ更新
-    log_debug "Processing single workspace: $normalized_ws"
-    local apps
-    apps=$(collect_windows_fast "$normalized_ws" | get_unique_apps)
-    update_workspace_icons "$normalized_ws" "$apps"
-    
+  if [ "${#targets[@]}" -gt 0 ]; then
+    log_debug "Processing targeted workspaces: ${targets[*]}"
+    for ws in "${targets[@]}"; do
+      local apps
+      apps=$(collect_windows_fast "$ws" | get_unique_apps)
+      update_workspace_icons "$ws" "$apps"
+    done
   else
-    # 全ワークスペース更新（フォールバック）
+    # 引数が無いか全て無効だった場合は全ワークスペース更新
     log_debug "Processing all workspaces"
     local all_data
     all_data=$(collect_windows_fast "")
     
-    # 各ワークスペースを処理
     for ws in $(seq "$MIN_WORKSPACE" "$MAX_WORKSPACE"); do
       local apps_for_ws
       apps_for_ws=$(echo "$all_data" | awk -F'|' -v id="$ws" '$1 == id {print $2}' | get_unique_apps)
@@ -219,8 +224,8 @@ main() {
 }
 
 # スクリプトの実行
-if [ -n "$1" ]; then
-  main "$1"
+if [ "$#" -gt 0 ]; then
+  main "$@"
 elif [ -n "$INFO" ]; then
   main "$INFO"
 else
