@@ -237,9 +237,9 @@ local function bindWorkspaceHotkeys()
   -- Alt 系は切替、Alt+Shift 系はノード移動
   local bindings = {
     {mods = {"alt"},            key = "n", dir = DIR_DOWN, op = OP_WORKSPACE},
-    {mods = {"alt"},            key = "p", dir = DIR_UP,   op = OP_WORKSPACE},
+    {mods = {"alt"},            key = "b", dir = DIR_UP,   op = OP_WORKSPACE},
     {mods = {"alt", "shift"},   key = "n", dir = DIR_DOWN, op = OP_MOVE_NODE},
-    {mods = {"alt", "shift"},   key = "p", dir = DIR_UP,   op = OP_MOVE_NODE},
+    {mods = {"alt", "shift"},   key = "b", dir = DIR_UP,   op = OP_MOVE_NODE},
   }
 
   for _, def in ipairs(bindings) do
@@ -252,4 +252,4 @@ bindWorkspaceHotkeys()
 
 -- ========= ユーティリティ =========
 hs.hotkey.bind({"cmd","alt","ctrl"}, "R", function() hs.reload() end)
-hs.alert.show("Alt+Wheel: switch / Alt+Shift+Wheel: move window / Alt+N,P: switch / Alt+Shift+N,P: move window")
+hs.alert.show("Alt+Wheel: switch / Alt+Shift+Wheel: move window / Alt+N,B: switch / Alt+Shift+N,B: move window")

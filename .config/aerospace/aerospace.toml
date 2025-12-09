@@ -102,7 +102,7 @@ alt-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor fo
 
 # アプリを移動
 alt-shift-n = 'move-node-to-workspace --wrap-around --focus-follows-window next'
-alt-shift-p = 'move-node-to-workspace --wrap-around --focus-follows-window prev'
+alt-shift-b = 'move-node-to-workspace --wrap-around --focus-follows-window prev'
 
 # 疑似ミニマイズ／復帰
 alt-m = '''exec-and-forget /Users/mekann/.config/aerospace/scripts/pseudo-minimize.sh'''
