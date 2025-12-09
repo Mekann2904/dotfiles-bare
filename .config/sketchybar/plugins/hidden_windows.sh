@@ -23,13 +23,21 @@ focused_workspace() {
   aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | head -n1 | tr -d '[:space:]'
 }
 
+# フォーカスワークスペース名から末尾の -hidden を剥がした「ベース」を返す。
+base_workspace() {
+  local ws
+  ws="$(focused_workspace)"
+  ws="${ws%-hidden}"
+  printf '%s\n' "$ws"
+}
+
 # 個別ウィンドウを現在のワークスペースへ戻す。
 restore_window() {
   local win_id="$1"
   [ -n "$win_id" ] || exit 0
 
   local ws
-  ws="$(focused_workspace)"
+  ws="$(base_workspace)"
   [ -n "$ws" ] || exit 0
 
   aerospace move-node-to-workspace --window-id "$win_id" "$ws" 2>/dev/null || exit 0
@@ -44,7 +52,7 @@ if [ "${1:-}" = "restore" ]; then
   exit 0
 fi
 
-WS="$(focused_workspace)"
+WS="$(base_workspace)"
 
 # フォーカスが無ければ全アイテムを隠す。
 if [ -z "$WS" ]; then
@@ -60,7 +68,7 @@ HIDDEN_WS="${WS}-hidden"
 # window-id と app-name を取得。移動途中の例外は無視する。
 hidden_list=$(aerospace list-windows --workspace "$HIDDEN_WS" --format '%{window-id}|%{app-name}' 2>/dev/null || true)
 
-hidden_count=$(printf '%s\n' "$hidden_list" | grep -c '|')
+hidden_count=$(printf '%s\n' "$hidden_list" | grep -c '|' || true)
 
 # 何も無ければ親アイコンも含めて隠す。
 if [ "$hidden_count" -eq 0 ]; then
