@@ -401,6 +401,44 @@ sketchybar --add item tasks right \
               popup.y_offset=5 \
               popup.height=30
 
+# 疑似ミニマイズ中のウィンドウをタスクアイコンの隣に並べる。
+sketchybar --add item hidden right \
+  --set hidden \
+    script="$PLUGIN_DIR/hidden_windows.sh" \
+    update_freq=3 \
+    icon="󰘚" \
+    icon.font="SF Pro:Semibold:13.0" \
+    icon.color=0x99FFFFFF \
+    label="" \
+    padding_left=4 \
+    padding_right=2 \
+    drawing=off \
+  --subscribe hidden \
+    aerospace_workspace_change \
+    window_created \
+    window_destroyed \
+    front_app_switched \
+    window_focused \
+    application_launched \
+    application_terminated
+
+for i in $(seq 1 4); do
+  sketchybar --add item hidden.icon${i} right \
+    --set hidden.icon${i} \
+      drawing=off \
+      width=24 \
+      icon=" " \
+      icon.drawing=on \
+      icon.width=16 \
+      icon.background.drawing=off \
+      icon.background.height=16 \
+      icon.background.corner_radius=3 \
+      icon.background.color=0x00000000 \
+      icon.background.y_offset=0 \
+      padding_left=2 \
+      padding_right=2
+done
+
 # Add popup task items (dynamically managed by tasks.sh)
 for i in $(seq 1 10); do
   sketchybar --add item task.$i popup.tasks \
