@@ -81,12 +81,12 @@ outer.top = [
 [mode.main.binding]
 
 # App shortcuts
-alt-d = 'exec-and-forget open -a /Applications/Discord.app'
-alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
-alt-t = 'exec-and-forget open -a /Applications/kitty.app'
-alt-m = 'exec-and-forget open -a /Applications/Mattermost.app'
-alt-v = 'exec-and-forget open -a /Applications/Vivaldi\ Snapshot.app'
-alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
+#alt-d = 'exec-and-forget open -a /Applications/Discord.app'
+#alt-o = 'exec-and-forget open -a /Applications/Obsidian.app'
+#alt-t = 'exec-and-forget open -a /Applications/kitty.app'
+#alt-m = 'exec-and-forget open -a /Applications/Mattermost.app'
+#alt-v = 'exec-and-forget open -a /Applications/Vivaldi\ Snapshot.app'
+#alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
 
 # 均等化
 alt-g = 'balance-sizes'
