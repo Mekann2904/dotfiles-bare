@@ -99,6 +99,10 @@ alt-b = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focu
 alt-shift-n = 'move-node-to-workspace --wrap-around --focus-follows-window next'
 alt-shift-p = 'move-node-to-workspace --wrap-around --focus-follows-window prev'
 
+# 疑似ミニマイズ／復帰
+alt-m = '''exec-and-forget /Users/mekann/.config/aerospace/scripts/pseudo-minimize.sh'''
+alt-shift-m = '''exec-and-forget /Users/mekann/.config/aerospace/scripts/pseudo-restore.sh'''
+
 # タイル内の向き変更のみ許可（URL の誤記を修正）
 # See: https://nikitabobko.github.io/AeroSpace/commands#layout
 alt-e = 'layout tiles horizontal vertical'
@@ -189,4 +193,3 @@ run = ['layout tiling']
 5 = 'secondary'
 6 = 'secondary'
 7 = 'secondary'
-
