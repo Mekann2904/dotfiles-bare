@@ -91,9 +91,14 @@ outer.top = [
 # 均等化
 alt-g = 'balance-sizes'
 
-# 次/前のワークスペースへ
-alt-n = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused | aerospace workspace --wrap-around next"'
-alt-b = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused | aerospace workspace --wrap-around prev"'
+# 次/前のワークスペースへ（*-hidden は巡回対象外）
+alt-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
+  | grep -v -- '-hidden$' \
+  | aerospace workspace --stdin --wrap-around next"'''
+
+alt-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
+  | grep -v -- '-hidden$' \
+  | aerospace workspace --stdin --wrap-around prev"'''
 
 # アプリを移動
 alt-shift-n = 'move-node-to-workspace --wrap-around --focus-follows-window next'
