@@ -69,8 +69,11 @@ outer.right  = 4
 outer.bottom = 4
 
 # モニタ別にtopだけ変える。配列内は「monitor.パターン = 値」だけを持つテーブル
+# モニター名は以下のコマンドを使用する
+# $Built-in Retina Display
 outer.top = [
   { monitor."LG HDR QHD" = 44 },
+  { monitor."LG ULTRAFINE" = 44 },
   4
 ]
 
