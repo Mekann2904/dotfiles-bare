@@ -89,11 +89,11 @@ alt-v = 'exec-and-forget open -a /Applications/Vivaldi\ Snapshot.app'
 alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
 
 # 均等化
-alt-b = 'balance-sizes'
+alt-g = 'balance-sizes'
 
 # 次/前のワークスペースへ
 alt-n = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused | aerospace workspace --wrap-around next"'
-alt-p = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused | aerospace workspace --wrap-around prev"'
+alt-b = 'exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused | aerospace workspace --wrap-around prev"'
 
 # アプリを移動
 alt-shift-n = 'move-node-to-workspace --wrap-around --focus-follows-window next'
