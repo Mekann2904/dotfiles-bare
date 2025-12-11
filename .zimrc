@@ -17,6 +17,12 @@ zmodule termtitle
 # Utility aliases and functions. Adds colour to ls, grep and less.
 zmodule utility
 
+# Homebrew / fzf まわり（お好みで有効化）
+# Homebrew 関連の補助機能（brew doctor などの補助）
+zmodule homebrew
+# fzf の連携関数（fzf 自体は brew で入っている前提）
+zmodule fzf
+
 # <-- Normally new modules should be added here. Check each module documentation
 # for any caveats.
 
@@ -40,17 +46,29 @@ zmodule zsh-users/zsh-completions --fpath src
 # Enables and configures smart and extensive tab completion, must be sourced
 # after all modules that add completion definitions.
 zmodule completion
+# fzf-tab: fzf を使った補完 UI。completion のあとに置く。
+zmodule Aloxaf/fzf-tab
 
 #
 # Modules that must be initialized last
 #
 
-# Fish-like syntax highlighting for Zsh, must be sourced after completion.
-zmodule zsh-users/zsh-syntax-highlighting
-# Fish-like history search for Zsh, must be sourced after
-# zsh-users/zsh-syntax-highlighting. Bind keyboard shortcuts in your ~/.zshrc:
-# https://github.com/zsh-users/zsh-history-substring-search/blob/master/README.md#usage
-#zmodule zsh-users/zsh-history-substring-search
-# Fish-like autosuggestions for Zsh. Add the following to your ~/.zshrc to boost
-# performance: ZSH_AUTOSUGGEST_MANUAL_REBIND=1
+# Syntax highlighting
+# どちらか片方だけ使うこと。好みで選んでOK。
+
+# パターン:
+# - zsh-users/zsh-syntax-highlighting: メジャーで無難
+# - zdharma-continuum/fast-syntax-highlighting: 高速で機能多め
+
+# 例1: 従来どおり zsh-syntax-highlighting を使う場合
+# zmodule zsh-users/zsh-syntax-highlighting
+
+# 例2: fast-syntax-highlighting に乗り換える場合（おすすめ）
+zmodule zdharma-continuum/fast-syntax-highlighting
+
+# Fish-like autosuggestions for Zsh.
+# Add the following to your ~/.zshrc to boost performance: ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 zmodule zsh-users/zsh-autosuggestions
+# Clipboard plugin
+zmodule Mekann2904/zsh-clipboard --source clipboard.plugin.zsh
+zmodule Mekann2904/zsh-git --source git.plugin.zsh

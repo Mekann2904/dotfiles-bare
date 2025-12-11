@@ -7,6 +7,10 @@
 # === 0. 基本設定 & パス設定 (Basic Settings & Path) ===
 typeset -U path PATH
 
+# 起動時間計測
+zmodload zsh/zprof
+
+
 # PATH設定 (配列定義・重複排除・存在チェックなしで高速に追加)
 path=(
     "/opt/homebrew/bin"
@@ -51,7 +55,6 @@ export LESS=eR
 export MDCAT_PAGER=""
 
 # --- [高速化] Homebrew / SDK パス設定 ---
-# 毎回 brew --prefix や xcrun を叩くと遅いため、標準パスを優先チェックする
 if [[ -d /opt/homebrew ]]; then
   _brew_prefix="/opt/homebrew"
 elif [[ -d /usr/local ]]; then
@@ -69,23 +72,12 @@ unset _brew_prefix
 
 # macOS SDK (存在チェックのみで高速化)
 if [[ -x /usr/bin/xcrun ]]; then
-    # 開発時以外は不要な場合が多いため、必要な場合のみコメントアウトを外す
     # export SDKROOT="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null)"
     :
 fi
 
-# === GitHub CLI 補完 (zimfw / completion より前に置く) ===
-_zsh_compdir="$HOME/.zsh/completions"
-if [[ ! -d "$_zsh_compdir" ]]; then
-  mkdir -p "$_zsh_compdir"
-fi
-fpath=("$_zsh_compdir" $fpath)
-if (( $+commands[gh] )); then
-  [[ -f "$_zsh_compdir/_gh" ]] || gh completion -s zsh > "$_zsh_compdir/_gh"
-fi
-unset _zsh_compdir
-
 # === Zimfw (Zsh フレームワーク) ===
+# 補完初期化の警告を防ぐため、GitHub CLI等の前に配置することを推奨
 
 ZIM_HOME=${ZDOTDIR:-${HOME}}/.zim
 
@@ -97,11 +89,27 @@ fi
 # Initialize modules.
 source ${ZIM_HOME}/init.zsh
 
+# === GitHub CLI 補完 ===
+# Zimfw読み込み後に配置 (fpathの順序制御のため)
+_zsh_compdir="$HOME/.zsh/completions"
+if [[ ! -d "$_zsh_compdir" ]]; then
+  mkdir -p "$_zsh_compdir"
+fi
+fpath=("$_zsh_compdir" $fpath)
+
+if (( $+commands[gh] )); then
+  # 補完ファイルがない場合のみ生成 (compinitはZimfwに任せるためここでは実行しない)
+  [[ -f "$_zsh_compdir/_gh" ]] || gh completion -s zsh > "$_zsh_compdir/_gh"
+fi
+unset _zsh_compdir
+
+
 # === 2. 遅延読み込み設定 (Lazy Loading) - 最重要高速化ポイント ===
 
 # --- Conda Lazy Load ---
 function conda() {
     unfunction conda
+    # パスが正しいか確認してください
     __conda_setup="$('/Users/mekann/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
     if [ $? -eq 0 ]; then
         eval "$__conda_setup"
@@ -164,45 +172,6 @@ DIRSTACKSIZE=6
 # Control-x Control-r で redo
 bindkey '^X^R' redo
 
-# === Ctrl-H で run-help を全文 clipcopy に送る ===
-autoload -Uz run-help
-
-run-help-copy-widget() {
-  emulate -L zsh
-
-  # 現在の行をシェル単語に分解して先頭のコマンド名を取得
-  local cmd
-  set -- ${(z)BUFFER}
-  cmd="$1"
-
-  if [[ -z "$cmd" ]]; then
-    zle -M "no command to lookup"
-    return
-  fi
-
-  # 出力先コマンドを決定（clipcopy 前提、なければエラー表示）
-  local copy_cmd
-  if command -v clipcopy >/dev/null 2>&1; then
-    copy_cmd=clipcopy
-  else
-    zle -M "clipcopy not found"
-    return 1
-  fi
-
-  # pager を殺して run-help の出力をそのまま clipcopy へ
-  if PAGER=cat MANPAGER=cat run-help "$cmd" 2>/dev/null | $copy_cmd; then
-    zle -M "help copied (clipcopy): $cmd"
-  else
-    zle -M "no help for: $cmd"
-  fi
-}
-
-# ZLE に登録して Ctrl-H に割り当て
-zle -N run-help-copy-widget
-bindkey -r '^H' 2>/dev/null
-bindkey '^H' run-help-copy-widget
-
-
 ## === zsh固有のヘルプ機能 ===
 unalias run-help 2>/dev/null
 autoload -Uz run-help
@@ -221,13 +190,9 @@ if [[ -f /singularity ]]; then
 fi
 
 # === 6. エイリアス (Aliases) ===
-if [[ -f /usr/local/bin/gnuls ]]; then
-  alias ls="gnuls --show-control-chars --color=none -F"
-elif [[ $OSTYPE == linux* ]]; then
-  alias ls="ls --show-control-chars --color=none -F"
-else
-  alias ls="ls -F -G"
-fi
+
+# 設定再読み込み (sourceではなくexec zshを使う)
+alias reload='exec zsh'
 
 alias h="fc -l -d -20"
 alias history="fc -l -d -$HISTSIZE"
@@ -280,19 +245,18 @@ function save_last_dir { echo $PWD >! $LAST_DIR_FILE; }
 function load_last_dir { [[ -f $LAST_DIR_FILE ]] && builtin cd "$(cat $LAST_DIR_FILE)"; }
 autoload -U add-zsh-hook
 add-zsh-hook chpwd save_last_dir
-load_last_dir
+# 最後に呼び出す (定義順序依存を避けるため)
 
 # === 9. 補完設定 (Completion) - fzf-tab用に強化 ===
 # ※ compinit は zimfw の completion モジュールに任せる
 
-# 補完オプション
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 zstyle ':completion:*' ignore-parents parent pwd ..
 zstyle ':completion:*:default' menu select=1
 zstyle ':completion:*:cd:*' ignore-parents parent pwd
 
-# ★重要: fzf-tab には descriptions (グループ名表示) が必須
+# fzf-tab設定
 zstyle ':completion:*:descriptions' format '[%d]'
 zstyle ':completion:*' group-name ''
 
@@ -308,11 +272,14 @@ bindkey -e
 # === 10. ツール別設定 (その他) ===
 
 # SSH Agent
-if [[ -o login ]] && [[ -z "$SSH_AUTH_SOCK" ]]; then
-  eval $(ssh-agent) >/dev/null
-  ssh-add ~/.ssh/id_rsa 2>/dev/null
-fi
-alias start-ssh='eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa'
+#if [[ -o login ]] && [[ -z "$SSH_AUTH_SOCK" ]]; then
+#  eval $(ssh-agent) >/dev/null
+#  ssh-add ~/.ssh/id_rsa 2>/dev/null
+#fi
+#alias start-ssh='eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa'
+
+alias start-ssh='eval $(ssh-agent) >/dev/null && ssh-add ~/.ssh/id_rsa 2>/dev/null'
+
 
 # kiro
 [[ "$TERM_PROGRAM" == "kiro" && (( $+commands[kiro] )) ]] && . "$(kiro --locate-shell-integration-path zsh)"
@@ -326,9 +293,14 @@ fi
 if [[ $TERM == "xterm" ]]; then export TERM=xterm-color; fi
 
 # uv
+_uv_compdir="$HOME/.zsh/completions"
+[[ -d "$_uv_compdir" ]] || mkdir -p "$_uv_compdir"
+fpath=("$_uv_compdir" $fpath)
+
 if command -v uv >/dev/null 2>&1; then
-  eval "$(uv generate-shell-completion zsh)"
+  [[ -f "$_uv_compdir/_uv" ]] || uv generate-shell-completion zsh >"$_uv_compdir/_uv"
 fi
+unset _uv_compdir
 
 # === 11. ターミナルタイトル ===
 function xtitle { print -Pn "\e]2;%~\a"; }
@@ -359,7 +331,7 @@ fgit() {
   local preview_cmd='
     target={}
     if [ -d "$target" ]; then
-      readme=$(find "$target" -maxdepth 1 -iname "readme*" -print-quit 2>/dev/null)
+      readme=$(find "$target" -maxdepth 1 -iname "readme*" -print -quit 2>/dev/null)
       if [ -n "$readme" ]; then
         if command -v bat >/dev/null 2>&1; then
           bat --style=numbers --color=always --line-range :100 "$readme"
@@ -495,22 +467,30 @@ fi
 
 ee() { command eza "${EZA_BASE_OPTS[@]}" "$@"; }
 
+# ★ 修正ポイント: mktemp の安全な使用と強制上書き
 _eza_smart() {
   [[ -t 1 ]] || return 0
-  local tmp; tmp=$(mktemp -t eza_out.XXXXXX)
 
+  # mktemp のテンプレートを明示し、失敗時は終了
+  local tmp
+  tmp=$(command mktemp -t eza_out.XXXXXX) || return 1
+
+  # >! を使用して noclobber 設定時でも強制上書きする
   if _eza_supports --ignore-glob; then
-    ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB" >"$tmp" 2>/dev/null
+    ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB" >! "$tmp" 2>/dev/null
   else
-    ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" >"$tmp" 2>/dev/null
+    ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" >! "$tmp" 2>/dev/null
   fi
 
-  local lines; lines=$(wc -l <"$tmp" | tr -d ' ')
+  local lines
+  lines=$(wc -l <"$tmp" | tr -d ' ')
+
   if (( ${lines:-0} <= EZA_MAX_LINES )); then
     cat "$tmp"
   else
     ee "${EZA_GRID_OPTS[@]}"
   fi
+
   rm -f "$tmp"
 }
 
@@ -569,80 +549,49 @@ ls() {
 # === 13. 補完の高度な設定 (fzf-tab & Git) =====================
 
 # --- 1. fzf-tab 基本設定 ---
-# プレビュー表示の有無やキーバインド
 zstyle ':fzf-tab:*' fzf-command fzf
 zstyle ':fzf-tab:*' fzf-min-height 20
 zstyle ':fzf-tab:*' fzf-bindings 'ctrl-/:toggle-preview'
 
 # --- 2. Git 補完のソート無効化 (時系列維持) ---
-# Zsh側のソートを無効化 (Git系コマンド全体に適用)
 zstyle ':completion:*:git-*' sort false
 zstyle ':completion:*:git-*' rehash true
-
-# fzf側のソートも無効化 (入ってきた順序=日付順で表示)
 zstyle ':fzf-tab:complete:git-*' fzf-flags --no-sort
 
 # --- 3. プレビュー設定 (Preview) ---
-# git checkout / switch / restore: コミットグラフと情報を表示
-# {1} は対象の単語(ブランチ名やハッシュ)に置換される
 zstyle ':fzf-tab:complete:git-(checkout|switch|restore):*' fzf-preview \
 	'git log --oneline --graph --date=short --color=always --pretty="format:%C(auto)%cd %h%d %s" {1} | head -20'
 
-# git diff / add / reset: 変更内容を表示
 zstyle ':fzf-tab:complete:git-(diff|add|reset):*' fzf-preview \
 	'git show --color=always $word | head -20'
 
-# kill コマンドのプロセスID補完時に ps の結果をプレビュー
 zstyle ':completion:*:*:*:*:processes' command "ps -u $USER -o pid,user,comm -w -w"
 zstyle ':fzf-tab:complete:(kill|ps):argument-rest' fzf-preview \
   '[[ $group == "[process ID]" ]] && ps --pid=$word -o cmd --no-headers -w -w'
 zstyle ':fzf-tab:complete:(kill|ps):argument-rest' fzf-flags --preview-window=down:3:wrap
 
-# === 14. FZF key bindings (Ctrl-R / Ctrl-T / Alt-C など) ===
-# すべての bindkey / プラグイン読み込みが終わったあとで読む
-if [[ -f ~/.fzf.zsh ]]; then
-  source ~/.fzf.zsh
-fi
-
-# === 15. Ctrl-J: ripgrep + fzf 検索 ===
-# rg と fzf が入っているときだけ有効にする
+# === 14. Ctrl-J: ripgrep + fzf 検索 ===
 if (( $+commands[rg] )) && (( $+commands[fzf] )); then
   fzf-ripgrep-widget() {
     emulate -L zsh
-
     local query selected file line
-
-    # いまのコマンドライン全体をクエリとして使う
     query="$LBUFFER$RBUFFER"
     [[ -z $query ]] && return 0
-
-    # 画面をいったん解放（fzf に画面を使わせる）
     zle -I
-
-    # ripgrep の結果を fzf に流し込む
     selected=$(
       rg --line-number --no-heading --color=always "$query" 2>/dev/null |
-        fzf --ansi --delimiter : --nth 3.. \
+      fzf --ansi --delimiter : --nth 3.. \
             --preview 'bat --style=numbers --color=always --line-range :200 {1} 2>/dev/null || head -n 200 {1}' \
             --preview-window='right:60%:border-rounded:wrap'
     )
-
-    # fzf を抜けたら ZLE を再描画
     zle redisplay
-
-    # キャンセルされたら何もしない
     [[ -z $selected ]] && return 0
-
-    # "file:line:..." から file / line を取り出す
     file=${selected%%:*}
     line=${${selected#*:}%%:*}
-
-    # エディタで開くコマンドをバッファに詰めて実行
     BUFFER="vim +${line} ${(q)file}"
     CURSOR=${#BUFFER}
     zle accept-line
   }
-
   zle -N fzf-ripgrep-widget
   bindkey '^J' fzf-ripgrep-widget
 fi
@@ -650,3 +599,6 @@ fi
 alias dot='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 alias lazydot='lazygit --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 
+# === 起動時のディレクトリ復元 (Load Last Dir) ===
+# すべての設定読み込みが終わった後に実行して、chpwdフックのエラーを防ぐ
+load_last_dir
