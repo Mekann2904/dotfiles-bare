@@ -76,4 +76,13 @@ zmodule Mekann2904/zsh-clipboard --source clipboard.plugin.zsh
 zmodule Mekann2904/zsh-git --source git.plugin.zsh
 zmodule Mekann2904/zsh-kitty --source kitty.plugin.zsh
 zmodule olets/zsh-abbr
+zmodule Mekann2904/zsh-bat
+zmodule Mekann2904/zsh-eza --source eza.plugin.zsh
+zmodule Mekann2904/zsh-fgit --source fgit.plugin.zsh
+zmodule Mekann2904/zsh-timer-tui --source timer-tui.plugin.zsh
 
+
+# Compile the completion dump to speed up loading
+if [[ -s ~/.zcompdump && (! -s ~/.zcompdump.zwc || ~/.zcompdump -nt ~/.zcompdump.zwc) ]]; then
+  zcompile ~/.zcompdump
+fi

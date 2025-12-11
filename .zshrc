@@ -1,26 +1,48 @@
 # ==============================================================================
-#
-# Zsh Configuration File (.zshrc) - Performance Optimized & Fully Integrated
-#
+# ┌────────────────────────────────────────────────────────────────────────────┐
+# │                                                                            │
+# │   ███████╗ ███████╗ ██╗  ██╗      Z  S  H   C  O  N  F  I  G               │
+# │   ╚══███╔╝ ██╔════╝ ██║  ██║      ──────────────────────────               │
+# │     ███╔╝  ███████╗ ███████║      The Advanced Shell                       │
+# │    ███╔╝   ╚════██║ ██╔══██║      Maintained by Mekann                     │
+# │   ███████╗ ███████║ ██║  ██║                                               │
+# │   ╚══════╝ ╚══════╝ ╚═╝  ╚═╝                                               │
+# │                                                                            │
+# └────────────────────────────────────────────────────────────────────────────┘
 # ==============================================================================
+
 
 # === 0. 基本設定 & パス設定 (Basic Settings & Path) ===
 typeset -U path PATH
 
 # 計測
-zmodload zsh/zprof
+#zmodload zsh/zprof
 
 # --- Homebrew shellenv キャッシュ ---
-brew_cache=${HOME}/.cache/brew-shellenv.zsh
+#brew_cache=${HOME}/.cache/brew-shellenv.zsh
 
-if command -v brew >/dev/null 2>&1; then
-  # キャッシュが無い、もしくは brew 本体がキャッシュより新しければ再生成
-  if [[ ! -r $brew_cache || $(command -v brew) -nt $brew_cache ]]; then
-    mkdir -p "${HOME}/.cache"
-    brew shellenv >! "$brew_cache"
-  fi
-  source "$brew_cache"
-fi
+#if command -v brew >/dev/null 2>&1; then
+#  # キャッシュが無い、もしくは brew 本体がキャッシュより新しければ再生成
+#  if [[ ! -r $brew_cache || $(command -v brew) -nt $brew_cache ]]; then
+#    mkdir -p "${HOME}/.cache"
+#    brew shellenv >! "$brew_cache"
+#  fi
+#  source "$brew_cache"
+#fi
+
+# === Homebrew: Static Configuration (Fastest) ===
+# No checks, just set variables.
+export HOMEBREW_PREFIX="/opt/homebrew"
+export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
+export HOMEBREW_REPOSITORY="/opt/homebrew"
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+export MANPATH="/opt/homebrew/share/man:$MANPATH"
+export INFOPATH="/opt/homebrew/share/info:$INFOPATH"
+
+# Hardcode the library paths (Derived from your previous script)
+export LDFLAGS="-L/opt/homebrew/opt/libassuan/lib -L/opt/homebrew/opt/libgpg-error/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/libassuan/include -I/opt/homebrew/opt/libgpg-error/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/libassuan/lib/pkgconfig:/opt/homebrew/opt/libgpg-error/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
 
 # PATH設定 (配列定義・重複排除・存在チェックなしで高速に追加)
 # Homebrew 側が設定した PATH に対して「足すだけ」にする
@@ -291,6 +313,8 @@ bindkey -e
 
 alias start-ssh='eval $(ssh-agent) >/dev/null && ssh-add ~/.ssh/id_rsa 2>/dev/null'
 
+#glow
+GLAMOUR_STYLE="tokyo-night"
 
 # kiro
 [[ "$TERM_PROGRAM" == "kiro" && (( $+commands[kiro] )) ]] && . "$(kiro --locate-shell-integration-path zsh)"
@@ -321,299 +345,8 @@ xtitle
 
 
 # === 12. 独自ツール ===========================================
+# zimfwに全て以降しました
 
-## === fgit (高速リポジトリ移動) ===
-fgit() {
-  emulate -L zsh
-  local base=${1:-$HOME}
-  local cmd_repos cmd_grep
-
-  if command -v fd >/dev/null 2>&1; then
-    cmd_repos="fd -H -I -t d --max-depth 5 '^.git$' '$base' -x echo {//}"
-  else
-    cmd_repos="find '$base' -maxdepth 5 -name .git -type d 2>/dev/null | sed 's|/\.git$||'"
-  fi
-
-  if command -v rg >/dev/null 2>&1; then
-    cmd_grep="rg --files-with-matches --glob 'README*' --smart-case {q} '$base' | sed 's|/[^/]*$||'"
-  else
-    cmd_grep="grep -rl --include='README*' {q} '$base' 2>/dev/null | sed 's|/[^/]*$||'"
-  fi
-
-  local preview_cmd='
-    target={}
-    if [ -d "$target" ]; then
-      readme=$(find "$target" -maxdepth 1 -iname "readme*" -print -quit 2>/dev/null)
-      if [ -n "$readme" ]; then
-        if command -v bat >/dev/null 2>&1; then
-          bat --style=numbers --color=always --line-range :100 "$readme"
-        else
-          head -n 100 "$readme"
-        fi
-      else
-        echo "\x1b[33m[No README found]\x1b[0m"
-        if command -v eza >/dev/null 2>&1; then
-          eza --tree --level=1 --color=always "$target"
-        else
-          ls -F --color=always "$target" | head -n 20
-        fi
-      fi
-    else
-      echo "Not a directory: $target"
-    fi
-  '
-
-  local selected
-  selected=$(fzf --ansi \
-    --layout=reverse --border --prompt='Repos> ' \
-    --header='ENTER:Go | CTRL-G:Switch Mode (Repos <-> Grep)' \
-    --preview="$preview_cmd" \
-    --preview-window='right:60%:border-rounded:wrap' \
-    --bind "start:reload:$cmd_repos" \
-    --bind "ctrl-g:transform:
-      if [[ \"{fzf:prompt}\" == \"Repos> \" ]]; then
-        echo 'change-prompt(Grep> )+clear-query+rebind(change)+reload($cmd_grep)'
-      else
-        echo 'change-prompt(Repos> )+unbind(change)+reload($cmd_repos)'
-      fi" \
-    --bind "change:transform:
-      if [[ \"{fzf:prompt}\" == \"Grep> \" ]]; then
-        echo 'reload($cmd_grep)'
-      fi"
-  )
-
-  if [[ -n "$selected" && -d "$selected" ]]; then
-    cd "$selected" || return 1
-    echo "Moved to \033[32m$selected\033[0m"
-  fi
-}
-
-## === tt (タイマー) ===
-tt() {
-  if [ -z "$1" ]; then
-    echo "Usage: tt <time> [label] (e.g., tt 5, tt 1h30m)"
-    return 1
-  fi
-
-  local input="$1"
-  shift
-  local duration=""
-
-  if [[ "$input" =~ ^[0-9]+$ ]]; then
-    duration="00:${input}:00"
-  else
-    local h=$(echo "$input" | grep -oE '[0-9]+h' | tr -d 'h')
-    local m=$(echo "$input" | grep -oE '[0-9]+m' | tr -d 'm')
-    local s=$(echo "$input" | grep -oE '[0-9]+s' | tr -d 's')
-    h=${h:-0}; m=${m:-0}; s=${s:-0}
-    duration=$(printf "%02d:%02d:%02d" $h $m $s)
-  fi
-
-  echo "⏱️  Starting timer: $duration ($input)"
-  timr-tui -c "$duration" -m countdown "$@"
-
-  if [ $? -eq 0 ]; then
-    echo -e "\a"
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      osascript -e "display notification \"Finished: $input\" with title \"Timer Done\" sound name \"Glass\""
-    fi
-  fi
-}
-
-## === fcp (FZF フルパスコピー) ===
-fcp() {
-  local selected
-  selected=$(fzf --height 40% --layout=reverse --border)
-
-  if [[ -n "$selected" ]]; then
-    local abs_path="${selected:A}"
-    local result="\"${abs_path}\""
-
-    if [[ "$OSTYPE" == darwin* ]]; then
-      echo -n "$result" | pbcopy
-    elif [[ -n "$WSL_DISTRO_NAME" ]]; then
-      echo -n "$result" | clip.exe
-    elif command -v wl-copy >/dev/null; then
-      echo -n "$result" | wl-copy
-    elif command -v xclip >/dev/null; then
-      echo -n "$result" | xclip -selection clipboard
-    elif command -v xsel >/dev/null; then
-      echo -n "$result" | xsel -b
-    else
-      echo "クリップボードコマンドが見つかりませんでした。"
-      echo "パス: $result"
-      return 1
-    fi
-    echo "Copied: $result"
-  fi
-}
-
-## === eza スマート設定（高速化版） ===
-# 既存エイリアス解除
-for a in t tg g gg l ll la ee; do unalias "$a" 2>/dev/null; done
-
-# eza がなければ素直に ls にフォールバックして終了
-if ! command -v eza >/dev/null 2>&1; then
-  ee() { command ls "$@"; }
-  t()  { ee "$@"; }
-  tg() { ee "$@"; }
-  g()  { ee "$@"; }
-  gg() { ee "$@"; }
-  l()  { ee -1 "$@"; }
-  ll() { ee -l "$@"; }
-  la() { ee -la "$@"; }
-  return 0
-fi
-
-# --- eza の機能検出を 1 回だけ実行してキャッシュ ---
-typeset -g _EZA_HELP
-_EZA_HELP=$(command eza --help 2>&1)
-
-_eza_supports() {
-  [[ $_EZA_HELP == *"$1"* ]]
-}
-
-typeset -a EZA_BASE_OPTS EZA_TREE_OPTS EZA_GRID_OPTS EZA_COLOR_ALWAYS
-EZA_BASE_OPTS=()
-
-_eza_supports '--group-directories-first' && EZA_BASE_OPTS+=(--group-directories-first)
-_eza_supports '--icons'                   && EZA_BASE_OPTS+=(--icons)
-
-EZA_TREE_OPTS=(-T -L 2 -l -h)
-_eza_supports '--git'         && EZA_TREE_OPTS+=(--git)
-_eza_supports '--header'      && EZA_TREE_OPTS+=(--header)
-_eza_supports '--quoting'     && EZA_TREE_OPTS+=(--quoting=auto)
-_eza_supports '--time-style'  && EZA_TREE_OPTS+=(--time-style=long-iso)
-
-EZA_GRID_OPTS=()
-: ${EZA_IGNORE_GLOB:="node_modules|.git|dist|build|.next|target|venv|.venv"}
-: ${EZA_MAX_LINES:=80}
-
-if [[ $_EZA_HELP == *'--color'* ]]; then
-  EZA_COLOR_ALWAYS=(--color=always)
-elif [[ $_EZA_HELP == *'--colour'* ]]; then
-  EZA_COLOR_ALWAYS=(--colour=always)
-else
-  EZA_COLOR_ALWAYS=()
-fi
-
-ee() { command eza "${EZA_BASE_OPTS[@]}" "$@"; }
-
-# --- 自動 ls の ON/OFF と起動直後スキップ用フラグ ---
-: ${EZA_AUTO:=1}     # 0 にすると chpwd 自動 ls を無効化
-EZA_SKIP_ONCE=1      # 起動直後の load_last_dir 由来 chpwd を 1 回だけスキップ
-
-# 行数で tree/grid を切り替えるスマート ls
-_eza_smart() {
-  # 非対話なら何もしない
-  [[ -t 1 ]] || return 0
-
-  # 自動 ls 無効
-  [[ "$EZA_AUTO" = 1 ]] || return 0
-
-  # 起動直後 1 回だけはスキップ（load_last_dir の chpwd 対策）
-  if [[ -n "$EZA_SKIP_ONCE" ]]; then
-    unset EZA_SKIP_ONCE
-    return 0
-  fi
-
-  # SSH のとき重いのが嫌ならコメント解除
-  # [[ -n "$SSH_CONNECTION" ]] && return 0
-
-  # mktemp のテンプレートを明示し、失敗時は終了
-  local tmp
-  tmp=$(command mktemp -t eza_out.XXXXXX) || return 1
-
-  # tree 表示を一度だけ生成してファイルに保存
-  if _eza_supports '--ignore-glob'; then
-    ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB" >! "$tmp" 2>/dev/null
-  else
-    ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" >! "$tmp" 2>/dev/null
-  fi
-
-  # 行数を見て tree / grid を切り替え
-  local lines
-  lines=$(wc -l <"$tmp" | tr -d ' ')
-
-  if (( ${lines:-0} <= EZA_MAX_LINES )); then
-    # 少ないときは tree 出力をそのまま表示
-    cat "$tmp"
-  else
-    # 多いときは grid で一覧（ここは eza をもう一度実行）
-    if _eza_supports '--ignore-glob'; then
-      ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_GRID_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB"
-    else
-      ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_GRID_OPTS[@]}"
-    fi
-  fi
-
-  rm -f "$tmp"
-}
-
-# ディレクトリ移動時に自動で _eza_smart を実行
-chpwd() { _eza_smart }
-
-# eza ショートカット
-t()  {
-  if _eza_supports '--ignore-glob'; then
-    ee "${EZA_TREE_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB" "$@"
-  else
-    ee "${EZA_TREE_OPTS[@]}" "$@"
-  fi
-}
-
-tg() {
-  local opts=(-T -L 3 -l -h)
-  _eza_supports '--git'        && opts+=(--git)
-  _eza_supports '--header'     && opts+=(--header)
-  _eza_supports '--quoting'    && opts+=(--quoting=auto)
-  _eza_supports '--time-style' && opts+=(--time-style=long-iso)
-  if _eza_supports '--ignore-glob'; then
-    ee "${opts[@]}" --ignore-glob "$EZA_IGNORE_GLOB" "$@"
-  else
-    ee "${opts[@]}" "$@"
-  fi
-}
-
-g()  { ee "${EZA_GRID_OPTS[@]}" "$@"; }
-
-gg() {
-  if _eza_supports '--git'; then
-    ee --git "$@"
-  else
-    ee "$@"
-  fi
-}
-
-l()  { ee -1 "$@"; }
-
-ll() {
-  local opts=(-l -h)
-  _eza_supports '--header'     && opts+=(--header)
-  _eza_supports '--git'        && opts+=(--git)
-  _eza_supports '--quoting'    && opts+=(--quoting=auto)
-  _eza_supports '--time-style' && opts+=(--time-style=long-iso)
-  ee "${opts[@]}" "$@"
-}
-
-la() {
-  local opts=(-la -h)
-  _eza_supports '--header'     && opts+=(--header)
-  _eza_supports '--git'        && opts+=(--git)
-  _eza_supports '--quoting'    && opts+=(--quoting=auto)
-  _eza_supports '--time-style' && opts+=(--time-style=long-iso)
-  ee "${opts[@]}" "$@"
-}
-
-## === ls オーバーライド ===
-unalias ls 2>/dev/null
-ls() {
-  if [[ $# -eq 0 ]]; then
-    _eza_smart
-  else
-    command ls "$@"
-  fi
-}
 
 # === 13. 補完の高度な設定 (fzf-tab & Git) =====================
 
