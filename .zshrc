@@ -10,10 +10,21 @@ typeset -U path PATH
 # 起動時間計測
 zmodload zsh/zprof
 
+# --- Homebrew shellenv キャッシュ ---
+brew_cache=${HOME}/.cache/brew-shellenv.zsh
+
+if command -v brew >/dev/null 2>&1; then
+  # キャッシュが無い、もしくは brew 本体がキャッシュより新しければ再生成
+  if [[ ! -r $brew_cache || $(command -v brew) -nt $brew_cache ]]; then
+    mkdir -p "${HOME}/.cache"
+    brew shellenv >! "$brew_cache"
+  fi
+  source "$brew_cache"
+fi
 
 # PATH設定 (配列定義・重複排除・存在チェックなしで高速に追加)
+# Homebrew 側が設定した PATH に対して「足すだけ」にする
 path=(
-    "/opt/homebrew/bin"
     "$HOME/opt/homebrew/bin/Python3"
     "$HOME/go/bin"
     "$HOME/Desktop/Automation-Code"
@@ -661,3 +672,5 @@ alias lazydot='lazygit --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 # すべての設定読み込みが終わった後に実行して、chpwdフックのエラーを防ぐ
 load_last_dir
 #eval "$(starship init zsh)"
+
+
