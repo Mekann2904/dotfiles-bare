@@ -7,7 +7,7 @@
 # === 0. 基本設定 & パス設定 (Basic Settings & Path) ===
 typeset -U path PATH
 
-# 起動時間計測
+# 計測
 zmodload zsh/zprof
 
 # --- Homebrew shellenv キャッシュ ---
