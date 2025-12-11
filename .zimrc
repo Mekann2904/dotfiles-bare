@@ -11,91 +11,75 @@
 # └────────────────────────────────────────────────────────────────────────────┘
 # ==============================================================================
 
-#
-# This is not sourced during shell startup and is only used to configure zimfw.
-#
+# -----------------------------------------------------------------------------
+# Zim initialization config (.zimrc)
+# このファイルは Zsh 起動時には直接は読まれず、zimfw の設定にのみ使う。
+# -----------------------------------------------------------------------------
 
-#
-# Modules
-#
+# -----------------------------------------------------------------------------
+# 基本モジュール（順序重要）
+# -----------------------------------------------------------------------------
+zmodule environment          # Zsh 組み込みオプションの sane 設定
+zmodule git                  # git エイリアス/関数
+zmodule input                # 入力系の bindkey
+zmodule termtitle            # 端末タイトル設定
+zmodule utility              # ls/grep/less のカラー等のユーティリティ
 
-# Sets sane Zsh built-in environment options.
-zmodule environment
-# Provides handy git aliases and functions.
-zmodule git
-# Applies correct bindkeys for input events.
-zmodule input
-# Sets a custom terminal title.
-zmodule termtitle
-# Utility aliases and functions. Adds colour to ls, grep and less.
-zmodule utility
+# Homebrew / fzf（必要なら有効化）
+zmodule homebrew             # brew 補助（doctor 等）
+zmodule fzf                  # fzf 連携（fzf は別途インストール前提）
 
-# Homebrew / fzf まわり（お好みで有効化）
-# Homebrew 関連の補助機能（brew doctor などの補助）
-zmodule homebrew
-# fzf の連携関数（fzf 自体は brew で入っている前提）
-zmodule fzf
+# -----------------------------------------------------------------------------
+# プロンプト
+# -----------------------------------------------------------------------------
+zmodule duration-info        # 直前のコマンド実行時間をプロンプトへ
+zmodule git-info             # git ステータスをプロンプトへ
+zmodule asciiship            # Spaceship/Starship 風の ASCII 軽量版
 
-# <-- Normally new modules should be added here. Check each module documentation
-# for any caveats.
+# -----------------------------------------------------------------------------
+# 補完
+# -----------------------------------------------------------------------------
+zmodule zsh-users/zsh-completions --fpath src   # 追加補完定義
+zmodule completion                              # 賢い補完（補完定義の後に置く）
+zmodule Aloxaf/fzf-tab                          # fzf ベースの補完
 
-#
-# Prompt
-#
+# -----------------------------------------------------------------------------
+#  その他
+# -----------------------------------------------------------------------------
+zmodule olets/zsh-abbr #alias
 
-# Exposes how long the last command took to run to prompts.
-zmodule duration-info
-# Exposes git repository status information to prompts.
-zmodule git-info
-# A heavily reduced, ASCII-only version of the Spaceship and Starship prompts.
-zmodule asciiship
 
-#
-# Completion
-#
+# -----------------------------------------------------------------------------
+# 管理済み
+# -----------------------------------------------------------------------------
+zmodule Mekann2904/zsh-clipboard   --source clipboard.plugin.zsh
+zmodule Mekann2904/zsh-git         --source git.plugin.zsh
+zmodule Mekann2904/zsh-kitty       --source kitty.plugin.zsh
+zmodule Mekann2904/zsh-eza         --source eza.plugin.zsh
+zmodule Mekann2904/zsh-fgit        --source fgit.plugin.zsh
+zmodule Mekann2904/zsh-timer-tui   --source timer-tui.plugin.zsh
+zmodule Mekann2904/zsh-bat
 
-# Additional completion definitions for Zsh.
-zmodule zsh-users/zsh-completions --fpath src
-# Enables and configures smart and extensive tab completion, must be sourced
-# after all modules that add completion definitions.
-zmodule completion
-# fzf-tab: fzf を使った補完 UI。completion のあとに置く。
-zmodule Aloxaf/fzf-tab
+# -----------------------------------------------------------------------------
+# 末尾初期化が必要なモジュール
+# -----------------------------------------------------------------------------
+# Fish ライクな自動サジェスト
+# 高速化したい場合は ~/.zshrc に `ZSH_AUTOSUGGEST_MANUAL_REBIND=1` を追記
+zmodule zsh-users/zsh-autosuggestions
 
-#
-# Modules that must be initialized last
-#
-
-# Syntax highlighting
-# どちらか片方だけ使うこと。好みで選んでOK。
-
-# パターン:
-# - zsh-users/zsh-syntax-highlighting: メジャーで無難
-# - zdharma-continuum/fast-syntax-highlighting: 高速で機能多め
-
-# 例1: 従来どおり zsh-syntax-highlighting を使う場合
-# zmodule zsh-users/zsh-syntax-highlighting
-
-# 例2: fast-syntax-highlighting に乗り換える場合（おすすめ）
+# 構文ハイライト（どちらか一方のみ使用）
+# 推奨: fast-syntax-highlighting
 zmodule zdharma-continuum/fast-syntax-highlighting
 typeset -gA FAST_HIGHLIGHT
 FAST_HIGHLIGHT[check-path]=0
 
-# Fish-like autosuggestions for Zsh.
-# Add the following to your ~/.zshrc to boost performance: ZSH_AUTOSUGGEST_MANUAL_REBIND=1
-zmodule zsh-users/zsh-autosuggestions
-# Clipboard plugin
-zmodule Mekann2904/zsh-clipboard --source clipboard.plugin.zsh
-zmodule Mekann2904/zsh-git --source git.plugin.zsh
-zmodule Mekann2904/zsh-kitty --source kitty.plugin.zsh
-zmodule olets/zsh-abbr
-zmodule Mekann2904/zsh-bat
-zmodule Mekann2904/zsh-eza --source eza.plugin.zsh
-zmodule Mekann2904/zsh-fgit --source fgit.plugin.zsh
-zmodule Mekann2904/zsh-timer-tui --source timer-tui.plugin.zsh
+# もし従来の zsh-syntax-highlighting を使う場合は上をコメントアウトし、以下を有効化
+# zmodule zsh-users/zsh-syntax-highlighting
 
-
-# Compile the completion dump to speed up loading
-if [[ -s ~/.zcompdump && (! -s ~/.zcompdump.zwc || ~/.zcompdump -nt ~/.zcompdump.zwc) ]]; then
+# -----------------------------------------------------------------------------
+# 補完ダンプのコンパイル（起動高速化）
+# -----------------------------------------------------------------------------
+if [[ -s ~/.zcompdump && ( ! -s ~/.zcompdump.zwc || ~/.zcompdump -nt ~/.zcompdump.zwc ) ]]; then
   zcompile ~/.zcompdump
 fi
+
