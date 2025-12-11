@@ -302,6 +302,7 @@ if command -v uv >/dev/null 2>&1; then
 fi
 unset _uv_compdir
 
+
 # === 11. ターミナルタイトル ===
 function xtitle { print -Pn "\e]2;%~\a"; }
 add-zsh-hook precmd xtitle
@@ -659,3 +660,4 @@ alias lazydot='lazygit --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 # === 起動時のディレクトリ復元 (Load Last Dir) ===
 # すべての設定読み込みが終わった後に実行して、chpwdフックのエラーを防ぐ
 load_last_dir
+#eval "$(starship init zsh)"
