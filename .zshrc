@@ -74,6 +74,29 @@ if [[ -x /usr/bin/xcrun ]]; then
     :
 fi
 
+# === GitHub CLI 補完 (zimfw / completion より前に置く) ===
+_zsh_compdir="$HOME/.zsh/completions"
+if [[ ! -d "$_zsh_compdir" ]]; then
+  mkdir -p "$_zsh_compdir"
+fi
+fpath=("$_zsh_compdir" $fpath)
+if (( $+commands[gh] )); then
+  [[ -f "$_zsh_compdir/_gh" ]] || gh completion -s zsh > "$_zsh_compdir/_gh"
+fi
+unset _zsh_compdir
+
+# === Zimfw (Zsh フレームワーク) ===
+
+ZIM_HOME=${ZDOTDIR:-${HOME}}/.zim
+
+# Install missing modules and update ${ZIM_HOME}/init.zsh if missing or outdated.
+if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc} ]]; then
+  source /opt/homebrew/opt/zimfw/share/zimfw.zsh init
+fi
+
+# Initialize modules.
+source ${ZIM_HOME}/init.zsh
+
 # === 2. 遅延読み込み設定 (Lazy Loading) - 最重要高速化ポイント ===
 
 # --- Conda Lazy Load ---
@@ -260,13 +283,7 @@ add-zsh-hook chpwd save_last_dir
 load_last_dir
 
 # === 9. 補完設定 (Completion) - fzf-tab用に強化 ===
-# 補完機能を初期化 (キャッシュ確認付きで高速化)
-autoload -Uz compinit
-if [[ -n ${ZDOTDIR:-$HOME}/.zcompdump(#qN.mh+24) ]]; then
-  compinit
-else
-  compinit -C
-fi
+# ※ compinit は zimfw の completion モジュールに任せる
 
 # 補完オプション
 zstyle ':completion:*' menu select
@@ -288,32 +305,7 @@ zstyle ':completion:*' list-colors "${LS_COLORS}"
 zmodload -i zsh/complist
 bindkey -e
 
-# === 10. プラグインマネージャー (Znap Optimized) ===
-# GitHub CLI補完
-_zsh_compdir="$HOME/.zsh/completions"
-if [[ ! -d "$_zsh_compdir" ]]; then mkdir -p "$_zsh_compdir"; fi
-fpath=("$_zsh_compdir" $fpath)
-if (( $+commands[gh] )); then
-  [[ -f "$_zsh_compdir/_gh" ]] || gh completion -s zsh > "$_zsh_compdir/_gh"
-fi
-
-# Znap 設定
-if [[ -r ~/app/zsh-snap/znap.zsh ]]; then
-  source ~/app/zsh-snap/znap.zsh
-  
-  plugins=(
-    git
-  )
-
-  # ライブラリ読み込み
-  znap source ohmyzsh/ohmyzsh
-  znap source Aloxaf/fzf-tab # zf-tab は fast-syntax-highlighting / autosuggestions より前に置く
-  znap source zdharma-continuum/fast-syntax-highlighting
-  znap source zsh-users/zsh-autosuggestions
-  
-fi
-
-# === 11. ツール別設定 (その他) ===
+# === 10. ツール別設定 (その他) ===
 
 # SSH Agent
 if [[ -o login ]] && [[ -z "$SSH_AUTH_SOCK" ]]; then
@@ -338,13 +330,13 @@ if command -v uv >/dev/null 2>&1; then
   eval "$(uv generate-shell-completion zsh)"
 fi
 
-# === 12. ターミナルタイトル ===
+# === 11. ターミナルタイトル ===
 function xtitle { print -Pn "\e]2;%~\a"; }
 add-zsh-hook precmd xtitle
 xtitle
 
 
-# === 13. 独自ツール ===========================================
+# === 12. 独自ツール ===========================================
 
 ## === fgit (高速リポジトリ移動) ===
 fgit() {
@@ -367,7 +359,7 @@ fgit() {
   local preview_cmd='
     target={}
     if [ -d "$target" ]; then
-      readme=$(find "$target" -maxdepth 1 -iname "readme*" -print -quit 2>/dev/null)
+      readme=$(find "$target" -maxdepth 1 -iname "readme*" -print-quit 2>/dev/null)
       if [ -n "$readme" ]; then
         if command -v bat >/dev/null 2>&1; then
           bat --style=numbers --color=always --line-range :100 "$readme"
@@ -574,7 +566,7 @@ ls() {
   fi
 }
 
-# === 14. 補完の高度な設定 (fzf-tab & Git) =====================
+# === 13. 補完の高度な設定 (fzf-tab & Git) =====================
 
 # --- 1. fzf-tab 基本設定 ---
 # プレビュー表示の有無やキーバインド
@@ -606,13 +598,13 @@ zstyle ':fzf-tab:complete:(kill|ps):argument-rest' fzf-preview \
   '[[ $group == "[process ID]" ]] && ps --pid=$word -o cmd --no-headers -w -w'
 zstyle ':fzf-tab:complete:(kill|ps):argument-rest' fzf-flags --preview-window=down:3:wrap
 
-# === 15. FZF key bindings (Ctrl-R / Ctrl-T / Alt-C など) ===
+# === 14. FZF key bindings (Ctrl-R / Ctrl-T / Alt-C など) ===
 # すべての bindkey / プラグイン読み込みが終わったあとで読む
 if [[ -f ~/.fzf.zsh ]]; then
   source ~/.fzf.zsh
 fi
 
-# === 16. Ctrl-J: ripgrep + fzf 検索 ===
+# === 15. Ctrl-J: ripgrep + fzf 検索 ===
 # rg と fzf が入っているときだけ有効にする
 if (( $+commands[rg] )) && (( $+commands[fzf] )); then
   fzf-ripgrep-widget() {
@@ -654,7 +646,6 @@ if (( $+commands[rg] )) && (( $+commands[fzf] )); then
   zle -N fzf-ripgrep-widget
   bindkey '^J' fzf-ripgrep-widget
 fi
-
 
 alias dot='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 alias lazydot='lazygit --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
