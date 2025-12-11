@@ -436,30 +436,50 @@ fcp() {
   fi
 }
 
-## === eza スマート設定 ===
+## === eza スマート設定（高速化版） ===
 # 既存エイリアス解除
 for a in t tg g gg l ll la ee; do unalias "$a" 2>/dev/null; done
 
-_eza_supports() { command eza --help 2>&1 | grep -q -- "$1"; }
+# eza がなければ素直に ls にフォールバックして終了
+if ! command -v eza >/dev/null 2>&1; then
+  ee() { command ls "$@"; }
+  t()  { ee "$@"; }
+  tg() { ee "$@"; }
+  g()  { ee "$@"; }
+  gg() { ee "$@"; }
+  l()  { ee -1 "$@"; }
+  ll() { ee -l "$@"; }
+  la() { ee -la "$@"; }
+  return 0
+fi
+
+# --- eza の機能検出を 1 回だけ実行してキャッシュ ---
+typeset -g _EZA_HELP
+_EZA_HELP=$(command eza --help 2>&1)
+
+_eza_supports() {
+  [[ $_EZA_HELP == *"$1"* ]]
+}
+
 typeset -a EZA_BASE_OPTS EZA_TREE_OPTS EZA_GRID_OPTS EZA_COLOR_ALWAYS
 EZA_BASE_OPTS=()
 
-_eza_supports --group-directories-first && EZA_BASE_OPTS+=(--group-directories-first)
-_eza_supports --icons                   && EZA_BASE_OPTS+=(--icons)
+_eza_supports '--group-directories-first' && EZA_BASE_OPTS+=(--group-directories-first)
+_eza_supports '--icons'                   && EZA_BASE_OPTS+=(--icons)
 
 EZA_TREE_OPTS=(-T -L 2 -l -h)
-_eza_supports --git         && EZA_TREE_OPTS+=(--git)
-_eza_supports --header      && EZA_TREE_OPTS+=(--header)
-_eza_supports --quoting     && EZA_TREE_OPTS+=(--quoting=auto)
-_eza_supports --time-style  && EZA_TREE_OPTS+=(--time-style=long-iso)
+_eza_supports '--git'         && EZA_TREE_OPTS+=(--git)
+_eza_supports '--header'      && EZA_TREE_OPTS+=(--header)
+_eza_supports '--quoting'     && EZA_TREE_OPTS+=(--quoting=auto)
+_eza_supports '--time-style'  && EZA_TREE_OPTS+=(--time-style=long-iso)
 
 EZA_GRID_OPTS=()
 : ${EZA_IGNORE_GLOB:="node_modules|.git|dist|build|.next|target|venv|.venv"}
 : ${EZA_MAX_LINES:=80}
 
-if command eza --help 2>&1 | grep -q -- '--color'; then
+if [[ $_EZA_HELP == *'--color'* ]]; then
   EZA_COLOR_ALWAYS=(--color=always)
-elif command eza --help 2>&1 | grep -q -- '--colour'; then
+elif [[ $_EZA_HELP == *'--colour'* ]]; then
   EZA_COLOR_ALWAYS=(--colour=always)
 else
   EZA_COLOR_ALWAYS=()
@@ -467,72 +487,109 @@ fi
 
 ee() { command eza "${EZA_BASE_OPTS[@]}" "$@"; }
 
-# ★ 修正ポイント: mktemp の安全な使用と強制上書き
+# --- 自動 ls の ON/OFF と起動直後スキップ用フラグ ---
+: ${EZA_AUTO:=1}     # 0 にすると chpwd 自動 ls を無効化
+EZA_SKIP_ONCE=1      # 起動直後の load_last_dir 由来 chpwd を 1 回だけスキップ
+
+# 行数で tree/grid を切り替えるスマート ls
 _eza_smart() {
+  # 非対話なら何もしない
   [[ -t 1 ]] || return 0
+
+  # 自動 ls 無効
+  [[ "$EZA_AUTO" = 1 ]] || return 0
+
+  # 起動直後 1 回だけはスキップ（load_last_dir の chpwd 対策）
+  if [[ -n "$EZA_SKIP_ONCE" ]]; then
+    unset EZA_SKIP_ONCE
+    return 0
+  fi
+
+  # SSH のとき重いのが嫌ならコメント解除
+  # [[ -n "$SSH_CONNECTION" ]] && return 0
 
   # mktemp のテンプレートを明示し、失敗時は終了
   local tmp
   tmp=$(command mktemp -t eza_out.XXXXXX) || return 1
 
-  # >! を使用して noclobber 設定時でも強制上書きする
-  if _eza_supports --ignore-glob; then
+  # tree 表示を一度だけ生成してファイルに保存
+  if _eza_supports '--ignore-glob'; then
     ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB" >! "$tmp" 2>/dev/null
   else
     ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_TREE_OPTS[@]}" >! "$tmp" 2>/dev/null
   fi
 
+  # 行数を見て tree / grid を切り替え
   local lines
   lines=$(wc -l <"$tmp" | tr -d ' ')
 
   if (( ${lines:-0} <= EZA_MAX_LINES )); then
+    # 少ないときは tree 出力をそのまま表示
     cat "$tmp"
   else
-    ee "${EZA_GRID_OPTS[@]}"
+    # 多いときは grid で一覧（ここは eza をもう一度実行）
+    if _eza_supports '--ignore-glob'; then
+      ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_GRID_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB"
+    else
+      ee "${EZA_COLOR_ALWAYS[@]}" "${EZA_GRID_OPTS[@]}"
+    fi
   fi
 
   rm -f "$tmp"
 }
 
+# ディレクトリ移動時に自動で _eza_smart を実行
 chpwd() { _eza_smart }
 
 # eza ショートカット
 t()  {
-  if _eza_supports --ignore-glob; then
+  if _eza_supports '--ignore-glob'; then
     ee "${EZA_TREE_OPTS[@]}" --ignore-glob "$EZA_IGNORE_GLOB" "$@"
   else
     ee "${EZA_TREE_OPTS[@]}" "$@"
   fi
 }
+
 tg() {
   local opts=(-T -L 3 -l -h)
-  _eza_supports --git         && opts+=(--git)
-  _eza_supports --header      && opts+=(--header)
-  _eza_supports --quoting     && opts+=(--quoting=auto)
-  _eza_supports --time-style && opts+=(--time-style=long-iso)
-  if _eza_supports --ignore-glob; then
+  _eza_supports '--git'        && opts+=(--git)
+  _eza_supports '--header'     && opts+=(--header)
+  _eza_supports '--quoting'    && opts+=(--quoting=auto)
+  _eza_supports '--time-style' && opts+=(--time-style=long-iso)
+  if _eza_supports '--ignore-glob'; then
     ee "${opts[@]}" --ignore-glob "$EZA_IGNORE_GLOB" "$@"
   else
     ee "${opts[@]}" "$@"
   fi
 }
+
 g()  { ee "${EZA_GRID_OPTS[@]}" "$@"; }
-gg() { _eza_supports --git && ee --git "$@" || ee "$@"; }
+
+gg() {
+  if _eza_supports '--git'; then
+    ee --git "$@"
+  else
+    ee "$@"
+  fi
+}
+
 l()  { ee -1 "$@"; }
+
 ll() {
   local opts=(-l -h)
-  _eza_supports --header && opts+=(--header)
-  _eza_supports --git    && opts+=(--git)
-  _eza_supports --quoting && opts+=(--quoting=auto)
-  _eza_supports --time-style && opts+=(--time-style=long-iso)
+  _eza_supports '--header'     && opts+=(--header)
+  _eza_supports '--git'        && opts+=(--git)
+  _eza_supports '--quoting'    && opts+=(--quoting=auto)
+  _eza_supports '--time-style' && opts+=(--time-style=long-iso)
   ee "${opts[@]}" "$@"
 }
+
 la() {
   local opts=(-la -h)
-  _eza_supports --header && opts+=(--header)
-  _eza_supports --git    && opts+=(--git)
-  _eza_supports --quoting && opts+=(--quoting=auto)
-  _eza_supports --time-style && opts+=(--time-style=long-iso)
+  _eza_supports '--header'     && opts+=(--header)
+  _eza_supports '--git'        && opts+=(--git)
+  _eza_supports '--quoting'    && opts+=(--quoting=auto)
+  _eza_supports '--time-style' && opts+=(--time-style=long-iso)
   ee "${opts[@]}" "$@"
 }
 
