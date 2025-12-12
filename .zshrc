@@ -18,6 +18,10 @@ typeset -U path PATH
 # 計測
 #zmodload zsh/zprof
 
+if [ ~/.zshrc -nt ~/.zshrc.zwc ]; then
+  zcompile ~/.zshrc
+fi
+
 # --- Homebrew shellenv キャッシュ ---
 #brew_cache=${HOME}/.cache/brew-shellenv.zsh
 
