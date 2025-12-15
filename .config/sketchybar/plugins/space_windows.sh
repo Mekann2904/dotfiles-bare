@@ -4,32 +4,79 @@
 # 実行コストを抑えつつワークスペース内容を即座に把握するために存在する。
 # 関連ファイル: sketchybarrc, plugins/update_single_workspace.sh, plugins/icon_map_fn.sh, plugins/aerospace.sh
 
-if [ "$SENDER" = "aerospace_workspace_change" ]; then
-  # 可視WSを一発で抽出（awkで厳密に判定）
-  visible_workspaces="$(
-    aerospace list-workspaces --format '%{id} %{workspace-is-visible}' \
-    | awk '$2=="true"{print $1}'
-  )"
+CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 
-  # 可視WSだけ更新
-  for workspace in $visible_workspaces; do
-    # アプリ名を明示フォーマットで取得（1行1アプリ）
-    apps="$(aerospace list-windows --workspace "$workspace" --format '%{app-name}' \
-      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
-      | awk 'NF' \
-    )"
+# aeroSpace の可視ワークスペース変化イベントのみ処理
+if [ "$SENDER" != "aerospace_workspace_change" ]; then
+  exit 0
+fi
 
-    sketchybar --set "space.$workspace" drawing=on
-
-    if [ -n "$apps" ]; then
-      icon_strip=" "
-      # 必要なら glyph 変換、未使用ならこの while 自体を削って native アイコン路線へ
-      while IFS= read -r app; do
-        icon_strip+=" $("$CONFIG_DIR/plugins/icon_map_fn.sh" "$app")"
-      done <<<"$apps"
-      sketchybar --set "space.$workspace" label="$icon_strip"
-    else
-      sketchybar --set "space.$workspace" label=""
+# アイコンキャッシュ（同一アプリでのフォーク回数を抑える）
+cache_apps=()
+cache_icons=()
+icon_cached() {
+  local app="$1" i
+  for i in "${!cache_apps[@]}"; do
+    if [ "${cache_apps[$i]}" = "$app" ]; then
+      printf '%s' "${cache_icons[$i]}"
+      return 0
     fi
   done
-fi
+  local icon
+  icon="$("$CONFIG_DIR/plugins/icon_map_fn.sh" "$app")"
+  cache_apps+=("$app")
+  cache_icons+=("$icon")
+  printf '%s' "$icon"
+}
+
+# 区切り文字（制御文字: 通常のアプリ名には含まれない）
+SEP=$'\034'
+
+# 可視WS一覧を一発取得（追加フィルタ無し）
+visible_workspaces="$(aerospace list-workspaces --all --visible --format '%{workspace}' 2>/dev/null)"
+[ -z "$visible_workspaces" ] && exit 0
+
+# 可視WSに属するウィンドウ一覧を一括取得（WS名とアプリ名）
+windows="$(aerospace list-windows --workspace visible --format '%{workspace}\t%{app-name}' 2>/dev/null)"
+
+# 可視WS順にアプリ名を連結して並べる（awk 1回で完結）
+grouped="$(
+  awk -F'\t' -v sep="$SEP" '
+    NR==FNR { vis[$0]=1; order[++n]=$0; next }
+    {
+      ws=$1; app=$2
+      sub(/^[[:space:]]+|[[:space:]]+$/, "", ws)
+      sub(/^[[:space:]]+|[[:space:]]+$/, "", app)
+      if (ws=="" || app=="") next
+      if (!(ws in vis)) next
+      if (out[ws]=="") out[ws]=app; else out[ws]=out[ws] sep app
+    }
+    END {
+      for (i=1; i<=n; i++) {
+        ws=order[i]
+        print ws "\t" out[ws]
+      }
+    }
+  ' <(printf '%s\n' "$visible_workspaces") <(printf '%s\n' "$windows")
+)"
+
+# sketchybar へのコマンドを一括で組み立てる
+args=()
+while IFS=$'\t' read -r workspace apps_joined; do
+  [ -z "$workspace" ] && continue
+
+  args+=(--set "space.$workspace" drawing=on)
+
+  if [ -n "$apps_joined" ]; then
+    icon_strip=" "
+    IFS="$SEP" read -r -a apps_arr <<<"$apps_joined"
+    for app in "${apps_arr[@]}"; do
+      icon_strip+=" $(icon_cached "$app")"
+    done
+    args+=(--set "space.$workspace" label="$icon_strip")
+  else
+    args+=(--set "space.$workspace" label="")
+  fi
+done <<<"$grouped"
+
+[ "${#args[@]}" -gt 0 ] && sketchybar "${args[@]}"
