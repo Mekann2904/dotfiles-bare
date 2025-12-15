@@ -189,7 +189,9 @@ build_and_apply_updates() {
     else
       cmd+=( --set "$item"
         drawing=off
-        width="$ICON_ITEM_WIDTH"
+        width=0
+        padding_left=0
+        padding_right=0
         icon=""
         icon.drawing=off
         icon.background.image=""
@@ -207,7 +209,18 @@ EOF
 
   while [ "$slot" -le "$VISIBLE_ICON_SLOTS" ]; do
     local item="space.$ws.icon$slot"
-    cmd+=( --set "$item" drawing=off icon.drawing=off icon.background.drawing=off icon="" label="" label.drawing=off width="$ICON_ITEM_WIDTH" )
+    # drawing=off だけだと幅が残り、囲み（bracket）の見た目がズレるので width=0 に寄せる。
+    cmd+=( --set "$item"
+      drawing=off
+      width=0
+      padding_left=0
+      padding_right=0
+      icon.drawing=off
+      icon.background.drawing=off
+      icon=""
+      label=""
+      label.drawing=off
+    )
     slot=$((slot+1))
   done
 
@@ -222,7 +235,14 @@ EOF
       label.padding_right=2
     )
   else
-    cmd+=( --set "space.$ws.more" drawing=off label="" label.drawing=off )
+    cmd+=( --set "space.$ws.more"
+      drawing=off
+      width=0
+      padding_left=0
+      padding_right=0
+      label=""
+      label.drawing=off
+    )
   fi
 
   "${cmd[@]}"

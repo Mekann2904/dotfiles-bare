@@ -145,7 +145,16 @@ update_workspace_icons() {
   # 残りのスロットを非表示に設定
   while [ "$slot" -le "$VISIBLE_ICON_SLOTS" ]; do
     local item="space.$workspace.icon$slot"
-    cmd+=(--set "$item" drawing=off icon.drawing=off icon.background.drawing=off)
+    # drawing=off だけだと幅が残り、ブランケットの左右余白が崩れるので width=0 に寄せる。
+    cmd+=(--set "$item"
+      drawing=off
+      width=0
+      padding_left=0
+      padding_right=0
+      icon=""
+      icon.drawing=off
+      icon.background.drawing=off
+    )
     slot=$((slot + 1))
   done
   
@@ -161,7 +170,14 @@ update_workspace_icons() {
       label.padding_right=2
     )
   else
-    cmd+=(--set "space.$workspace.more" drawing=off label="" label.drawing=off)
+    cmd+=(--set "space.$workspace.more"
+      drawing=off
+      width=0
+      padding_left=0
+      padding_right=0
+      label=""
+      label.drawing=off
+    )
   fi
   
   # バッチコマンドの実行

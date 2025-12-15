@@ -91,8 +91,8 @@ for sid in $(seq $workspace_min $workspace_max); do
     --set space.$sid \
       drawing=on \
       background.drawing=off \
-      padding_left=8 \
-      padding_right=2 \
+      padding_left=6 \
+      padding_right=6 \
       icon="$sid" \
       icon.font="SF Pro:Semibold:16.0" \
       icon.color=0xffffffff \
@@ -108,8 +108,8 @@ for sid in $(seq $workspace_min $workspace_max); do
       --set space.$sid.icon${icon_slot} \
         drawing=off \
         background.drawing=off \
-        padding_left=3 \
-        padding_right=3 \
+        padding_left=2 \
+        padding_right=2 \
         width=24 \
         icon.drawing=off \
         icon.width=16 \
@@ -123,11 +123,31 @@ for sid in $(seq $workspace_min $workspace_max); do
         click_script="aerospace workspace $sid"
   done
 
+  # ワークスペース番号とアプリ群をまとめてカプセル表示
+  sketchybar --add bracket space.$sid.wrap \
+    space.$sid \
+    space.$sid.icon1 \
+    space.$sid.icon2 \
+    space.$sid.icon3 \
+    space.$sid.icon4 \
+    space.$sid.more \
+    --set space.$sid.wrap \
+      drawing=off \
+      background.drawing=off \
+      background.color=0x00000000 \
+      background.corner_radius=6 \
+      background.height=24 \
+      background.padding_left=6 \
+      background.padding_right=6 \
+      background.y_offset=0 \
+      background.border_width=1 \
+      background.border_color=0x55FFFFFF
+
   sketchybar --add item space.$sid.more left \
     --set space.$sid.more \
       drawing=off \
-      padding_left=3 \
-      padding_right=6 \
+      padding_left=2 \
+      padding_right=2 \
       background.drawing=off \
       width=24 \
       icon.drawing=off \

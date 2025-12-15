@@ -40,12 +40,23 @@ if [ "$workspace_id" = "$FOCUSED_WORKSPACE" ]; then
   # フォーカスされているワークスペース：明るい白色の数字
   sketchybar --set "$NAME" \
     icon.color=0xFFFFFFFF \
-    icon.font="SF Pro:Bold:16.0"
+    icon.font="SF Pro:Bold:16.0" \
+    background.drawing=off
+  sketchybar --set "space.$workspace_id.wrap" \
+    drawing=on \
+    background.drawing=on \
+    background.color=0x00000000 \
+    background.border_width=1 \
+    background.border_color=0xAAFFFFFF
   log_debug "Set workspace $workspace_id as focused with bright color"
 else
   # フォーカスされていないワークスペース：半透明の白色の数字
   sketchybar --set "$NAME" \
     icon.color=0x88FFFFFF \
-    icon.font="SF Pro:Semibold:16.0"
+    icon.font="SF Pro:Semibold:16.0" \
+    background.drawing=off
+  sketchybar --set "space.$workspace_id.wrap" \
+    drawing=off \
+    background.drawing=off
   log_debug "Set workspace $workspace_id as unfocused"
 fi
