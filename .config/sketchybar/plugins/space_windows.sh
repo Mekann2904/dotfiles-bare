@@ -32,14 +32,14 @@ icon_cached() {
 # 区切り文字（制御文字: 通常のアプリ名には含まれない）
 SEP=$'\034'
 
-# 可視WS一覧を一発取得（追加フィルタ無し）
-visible_workspaces="$(aerospace list-workspaces --all --visible --format '%{workspace}' 2>/dev/null)"
+# 可視WS一覧（公式オプション構成に合わせる）
+visible_workspaces="$(aerospace list-workspaces --monitor all --visible --format '%{workspace}' 2>/dev/null)"
 [ -z "$visible_workspaces" ] && exit 0
 
 # 可視WSに属するウィンドウ一覧を一括取得（WS名とアプリ名）
-windows="$(aerospace list-windows --workspace visible --format '%{workspace}\t%{app-name}' 2>/dev/null)"
+windows="$(aerospace list-windows --workspace visible --format '%{workspace}%{tab}%{app-name}' 2>/dev/null)"
 
-# 可視WS順にアプリ名を連結して並べる（awk 1回で完結）
+# 可視WS順にアプリ名を連結して並べる（awk 1回で完結, WS内重複除去）
 grouped="$(
   awk -F'\t' -v sep="$SEP" '
     NR==FNR { vis[$0]=1; order[++n]=$0; next }
@@ -47,8 +47,9 @@ grouped="$(
       ws=$1; app=$2
       sub(/^[[:space:]]+|[[:space:]]+$/, "", ws)
       sub(/^[[:space:]]+|[[:space:]]+$/, "", app)
-      if (ws=="" || app=="") next
-      if (!(ws in vis)) next
+      if (ws=="" || app=="" || !(ws in vis)) next
+      key = ws SUBSEP app
+      if (seen[key]++) next
       if (out[ws]=="") out[ws]=app; else out[ws]=out[ws] sep app
     }
     END {
