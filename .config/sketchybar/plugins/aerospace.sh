@@ -42,12 +42,9 @@ if [ "$workspace_id" = "$FOCUSED_WORKSPACE" ]; then
     icon.color=0xFFFFFFFF \
     icon.font="SF Pro:Bold:16.0" \
     background.drawing=off
-  sketchybar --set "space.$workspace_id.wrap" \
+  sketchybar --set "space.$workspace_id.underline" \
     drawing=on \
-    background.drawing=on \
-    background.color=0x00000000 \
-    background.border_width=1 \
-    background.border_color=0xAAFFFFFF
+    background.drawing=on
   log_debug "Set workspace $workspace_id as focused with bright color"
 else
   # フォーカスされていないワークスペース：半透明の白色の数字
@@ -55,7 +52,7 @@ else
     icon.color=0x88FFFFFF \
     icon.font="SF Pro:Semibold:16.0" \
     background.drawing=off
-  sketchybar --set "space.$workspace_id.wrap" \
+  sketchybar --set "space.$workspace_id.underline" \
     drawing=off \
     background.drawing=off
   log_debug "Set workspace $workspace_id as unfocused"

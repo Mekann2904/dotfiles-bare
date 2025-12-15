@@ -123,25 +123,23 @@ for sid in $(seq $workspace_min $workspace_max); do
         click_script="aerospace workspace $sid"
   done
 
-  # ワークスペース番号とアプリ群をまとめてカプセル表示
-  sketchybar --add bracket space.$sid.wrap \
+  # フォーカス中ワークスペースを下線で示す（色は白のまま）
+  sketchybar --add bracket space.$sid.underline \
     space.$sid \
     space.$sid.icon1 \
     space.$sid.icon2 \
     space.$sid.icon3 \
     space.$sid.icon4 \
     space.$sid.more \
-    --set space.$sid.wrap \
+    --set space.$sid.underline \
       drawing=off \
       background.drawing=off \
-      background.color=0x00000000 \
-      background.corner_radius=6 \
-      background.height=24 \
-      background.padding_left=6 \
-      background.padding_right=6 \
-      background.y_offset=0 \
-      background.border_width=1 \
-      background.border_color=0x55FFFFFF
+      background.color=0xCCFFFFFF \
+      background.height=2 \
+      background.corner_radius=0 \
+      background.padding_left=0 \
+      background.padding_right=0 \
+      background.y_offset=-12
 
   sketchybar --add item space.$sid.more left \
     --set space.$sid.more \
