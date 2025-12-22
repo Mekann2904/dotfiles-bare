@@ -25,6 +25,22 @@ fi
 
 log "Event: SENDER=${SENDER:-} INFO=${INFO:-}"
 
+# --- Event filter: 対象イベント以外は即終了して無駄なプロセスを抑制 ---
+case "${SENDER:-}" in
+  aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
+    ;;  # 許可
+  *)
+    log "Skip sender=$SENDER"
+    [ -n "$DEBUG_LOG" ] && exec 3>&-
+    exit 0
+    ;;
+esac
+
+# window create/destroy は WM 側の状態反映が遅れることがあるため、わずかにデバウンス
+case "${SENDER:-}" in
+  window_created|window_destroyed) sleep 0.03 ;; # 30ms
+esac
+
 # --- Preflight checks ---
 if [ ! -x "$UPDATE_SCRIPT" ]; then
   log "ERROR: Update script not found or not executable: $UPDATE_SCRIPT"

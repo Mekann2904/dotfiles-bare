@@ -255,6 +255,7 @@ alias rtty="rtty run zsh -p 8080 --font-size 11"
 alias codex='/Users/mekann/.config/nvm/versions/node/v22.12.0/bin/codex'
 alias python='/usr/bin/python3'
 alias kilocode='/Users/mekann/.config/nvm/versions/node/v22.12.0/bin/kilocode'
+alias cline='/Users/mekann/.config/nvm/versions/node/v22.12.0/bin/cline'
 
 # === 7. 関数 (Functions) ===
 function fixname {

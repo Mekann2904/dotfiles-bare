@@ -7,8 +7,14 @@
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 SKETCHYBAR_BIN="${BAR_NAME:-sketchybar}"
 
-# aeroSpace のイベント以外は静かに終了
-[ "$SENDER" = "aerospace_workspace_change" ] || exit 0
+# 許可イベント以外は静かに終了
+case "$SENDER" in
+  aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
+    ;;  # 許可
+  *)
+    exit 0
+    ;;
+esac
 
 # デバッグログ（必要時のみ）
 if [ -n "$DEBUG_LOG" ]; then
