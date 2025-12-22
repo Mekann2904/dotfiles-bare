@@ -23,65 +23,16 @@ else
   log_debug() { :; }  # 何もしない
 fi
 
-# キャッシュファイルのパス
-CACHE_FILE="/tmp/sketchybar_clock_cache"
+# 2行表示: YYYY/MM/DD と HH:MM （曜日なしで等幅）
+date_line=$(date '+%Y/%m/%d')
+time_line=$(date '+%H:%M')
 
-# 日付部分をキャッシュから取得または計算
-get_cached_date() {
-  local current_date=$(date '+%Y%m%d')
-  local cached_date=""
-  local cached_date_part=""
-  
-  # キャッシュファイルが存在する場合、読み取り
-  if [ -f "$CACHE_FILE" ]; then
-    cached_date=$(head -n1 "$CACHE_FILE")
-    cached_date_part=$(tail -n1 "$CACHE_FILE")
-  fi
-  
-  # 日付が変わった場合またはキャッシュがない場合、再計算
-  if [ "$cached_date" != "$current_date" ] || [ -z "$cached_date_part" ]; then
-    # 曜日を漢字で取得する関数
-    get_kanji_day() {
-      local day_num=$(date '+%u')
-      case $day_num in
-        1) echo "月" ;;
-        2) echo "火" ;;
-        3) echo "水" ;;
-        4) echo "木" ;;
-        5) echo "金" ;;
-        6) echo "土" ;;
-        7) echo "日" ;;
-        *) echo "?" ;;
-      esac
-    }
-    
-    local month_day=$(date '+%m月%d日')
-    local kanji_day=$(get_kanji_day)
-    cached_date_part="${month_day}（${kanji_day}）"
-    
-    # キャッシュを更新
-    echo "$current_date" > "$CACHE_FILE"
-    echo "$cached_date_part" >> "$CACHE_FILE"
-    
-    log_debug "Date cache updated: $cached_date_part"
-  fi
-  
-  echo "$cached_date_part"
-}
+# 幅ぶれ防止のため、それぞれ固定長にパディング（10文字 + 5文字）
+date_line_fixed=$(printf '%-10s' "$date_line")
+time_line_fixed=$(printf '%-5s' "$time_line")
 
-# 日付部分をキャッシュから取得
-date_part=$(get_cached_date)
+# 実際の改行を含む文字列を生成（printf -vで \n を実体化）
+printf -v multiline_label "%s\n%s" "$date_line_fixed" "$time_line_fixed"
 
-# 時間部分のみを計算
-time_part=$(date '+%H:%M:%S')
-
-current_time="${date_part} ${time_part}"
-
-# 日付の取得に失敗した場合のフォールバック
-if [ -z "$current_time" ]; then
-  current_time="$(date '+%H:%M:%S')"
-  log_debug "Fallback to basic time format"
-fi
-
-sketchybar --set "$NAME" label="$current_time"
-log_debug "Clock updated: $current_time"
+sketchybar --set "$NAME" label="$multiline_label"
+log_debug "Clock updated: ${date_line_fixed} | ${time_line_fixed}"

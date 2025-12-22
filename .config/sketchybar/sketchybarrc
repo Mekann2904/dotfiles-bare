@@ -64,7 +64,7 @@ default=(
   padding_left=5
   padding_right=5
   icon.font="Hack Nerd Font:Bold:10.0"
-  label.font="SF Pro:Semibold:10.0"
+  label.font="Hack Nerd Font:Semibold:10.0"
   icon.color=0xffffffff
   label.color=0xffffffff
   icon.padding_left=2
@@ -94,7 +94,7 @@ for sid in $(seq $workspace_min $workspace_max); do
       padding_left=6 \
       padding_right=6 \
       icon="$sid" \
-      icon.font="SF Pro:Semibold:16.0" \
+      icon.font="Hack Nerd Font:Semibold:16.0" \
       icon.color=0xffffffff \
       icon.padding_left=0 \
       icon.padding_right=4 \
@@ -151,7 +151,7 @@ for sid in $(seq $workspace_min $workspace_max); do
       icon.drawing=off \
       label="" \
       label.drawing=off \
-      label.font="SF Pro:Semibold:12.0" \
+      label.font="Hack Nerd Font:Semibold:12.0" \
       label.color=0x99FFFFFF \
       label.padding_left=2 \
       label.padding_right=2 \
@@ -167,7 +167,7 @@ for sid in $(seq $workspace_min $workspace_max); do
         icon.drawing=off \
         label="|" \
         label.drawing=on \
-        label.font="SF Pro:Semibold:13.0" \
+        label.font="Hack Nerd Font:Semibold:13.0" \
         label.color=0x66FFFFFF
   fi
 done
@@ -319,11 +319,13 @@ sketchybar --add item avatar.popup_close popup.avatar \
 
 sketchybar --add item clock right \
   --set clock update_freq=1 script="$PLUGIN_DIR/clock.sh" \
-             width=150 \
-             padding_left=4 \
-             padding_right=4 \
-             label.width=150 \
+             width=90 \
+             padding_left=2 \
+             padding_right=2 \
+             label.width=90 \
+             label.font="Hack Nerd Font:Semibold:10.0" \
              label.align=center \
+             label.y_offset=0 \
              margin_left=0 \
              margin_right=0 \
   --add item volume right \
@@ -439,7 +441,7 @@ sketchybar --add item hidden right \
     script="$PLUGIN_DIR/hidden_windows.sh" \
     update_freq=3 \
     icon="󰘚" \
-    icon.font="SF Pro:Semibold:13.0" \
+    icon.font="Hack Nerd Font:Semibold:13.0" \
     icon.color=0x99FFFFFF \
     label="" \
     padding_left=4 \

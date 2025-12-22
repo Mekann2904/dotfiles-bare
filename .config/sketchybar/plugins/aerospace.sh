@@ -40,7 +40,7 @@ if [ "$workspace_id" = "$FOCUSED_WORKSPACE" ]; then
   # フォーカスされているワークスペース：明るい白色の数字
   sketchybar --set "$NAME" \
     icon.color=0xFFFFFFFF \
-    icon.font="SF Pro:Bold:16.0" \
+    icon.font="Hack Nerd Font:Bold:16.0" \
     background.drawing=off
   sketchybar --set "space.$workspace_id.underline" \
     drawing=on \
@@ -50,7 +50,7 @@ else
   # フォーカスされていないワークスペース：半透明の白色の数字
   sketchybar --set "$NAME" \
     icon.color=0x88FFFFFF \
-    icon.font="SF Pro:Semibold:16.0" \
+    icon.font="Hack Nerd Font:Semibold:16.0" \
     background.drawing=off
   sketchybar --set "space.$workspace_id.underline" \
     drawing=off \
