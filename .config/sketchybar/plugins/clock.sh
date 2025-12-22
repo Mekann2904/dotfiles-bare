@@ -23,16 +23,11 @@ else
   log_debug() { :; }  # 何もしない
 fi
 
-# 2行表示: YYYY/MM/DD と HH:MM （曜日なしで等幅）
-date_line=$(date '+%Y/%m/%d')
-time_line=$(date '+%H:%M')
+# 単行表示: HH:MM:SS（秒まで表示）
+time_line=$(date '+%H:%M:%S')
 
-# 幅ぶれ防止のため、それぞれ固定長にパディング（10文字 + 5文字）
-date_line_fixed=$(printf '%-10s' "$date_line")
-time_line_fixed=$(printf '%-5s' "$time_line")
+# 幅ぶれ防止のため固定長にパディング（8文字）
+time_line_fixed=$(printf '%-8s' "$time_line")
 
-# 実際の改行を含む文字列を生成（printf -vで \n を実体化）
-printf -v multiline_label "%s\n%s" "$date_line_fixed" "$time_line_fixed"
-
-sketchybar --set "$NAME" label="$multiline_label"
-log_debug "Clock updated: ${date_line_fixed} | ${time_line_fixed}"
+sketchybar --set "$NAME" label="$time_line_fixed"
+log_debug "Clock updated: ${time_line_fixed}"

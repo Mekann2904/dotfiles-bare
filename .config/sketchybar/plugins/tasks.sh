@@ -215,11 +215,8 @@ main() {
   tasks_data=$(get_cached_tasks)
   
   if [ $? -ne 0 ] || [ -z "$tasks_data" ]; then
-    log_debug "No tasks data available, showing 0"
-    sketchybar --set "$NAME" \
-      icon="󰓾" \
-      label="0" \
-      drawing=on
+    log_debug "No tasks data available, hide item"
+    sketchybar --set "$NAME" drawing=off label="" icon=""
     exit 0
   fi
   
@@ -231,18 +228,20 @@ main() {
   # 現在時刻のタスクを取得
   current_task=$(pick_focus_task "$tasks_data")
   
-  # 表示するラベルを決定
+  if [ "$incomplete_count" -eq 0 ]; then
+    log_debug "No incomplete tasks, hide item"
+    sketchybar --set "$NAME" drawing=off label="" icon=""
+    exit 0
+  fi
+
   if [ -n "$current_task" ]; then
-    # 現在時刻のタスクがあればタスク数とタイトルを表示
     display_label="$incomplete_count $current_task"
     log_debug "Current time task found: $current_task, showing with count"
   else
-    # なければタスク数のみ表示
     display_label="$incomplete_count"
     log_debug "No current time task, showing count only: $incomplete_count"
   fi
   
-  # 常に表示
   sketchybar --set "$NAME" \
     icon="󰓾" \
     label="$display_label" \

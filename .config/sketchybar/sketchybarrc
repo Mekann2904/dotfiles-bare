@@ -229,9 +229,9 @@ sketchybar --add item avatar right \
       popup.y_offset=6 \
       popup.height=32 \
       # ここで十分な横幅を確保して時計テキストとの重なりを防ぐ
-      padding_left=8                              \
-      padding_right=8                             \
-      width=28                                    \
+      padding_left=4                              \
+      padding_right=4                             \
+      width=24                                    \
       label.drawing=off                          \
       label.padding_left=0                       \
       label.padding_right=0
@@ -319,45 +319,49 @@ sketchybar --add item avatar.popup_close popup.avatar \
 
 sketchybar --add item clock right \
   --set clock update_freq=1 script="$PLUGIN_DIR/clock.sh" \
-             width=90 \
-             padding_left=2 \
-             padding_right=2 \
-             label.width=90 \
-             label.font="Hack Nerd Font:Semibold:10.0" \
+             width=56 \
+             padding_left=0 \
+             padding_right=0 \
+             margin_left=1 \
+             margin_right=1 \
+             label.width=56 \
+             label.font="Hack Nerd Font Mono:Semibold:10.0" \
              label.align=center \
              label.y_offset=0 \
              margin_left=0 \
              margin_right=0 \
   --add item volume right \
   --set volume script="$PLUGIN_DIR/volume.sh" \
-             padding_left=4 \
-             padding_right=4 \
-             margin_left=0 \
-             margin_right=0 \
+             padding_left=1 \
+             padding_right=1 \
+             margin_left=1 \
+             margin_right=1 \
   --subscribe volume volume_change \
   --add item battery right \
   --set battery update_freq=120 script="$PLUGIN_DIR/battery.sh" \
-             padding_left=4 \
-             padding_right=4 \
-             margin_left=0 \
-             margin_right=0 \
+             padding_left=1 \
+             padding_right=1 \
+             margin_left=1 \
+             margin_right=1 \
   --subscribe battery system_woke power_source_change \
-  --add item network right \
-  --set network update_freq=1 script="$PLUGIN_DIR/network.sh" \
-             padding_left=4 \
-             padding_right=4 \
-             margin_left=0 \
-             margin_right=0 \
-  --subscribe network network_change \
+# Wi-Fi表示を一時停止（表示不要のためコメントアウト）
+#  --add item network right \
+#  --set network update_freq=1 script="$PLUGIN_DIR/network.sh" \
+#             padding_left=4 \
+#             padding_right=4 \
+#             margin_left=0 \
+#             margin_right=0 \
+#  --subscribe network network_change \
 
-sketchybar --add item ram right \
-   --set ram script="$PLUGIN_DIR/ram_min.sh" \
-              update_freq=15 \
-              icon="󰍛" \
-              padding_left=4 \
-              padding_right=4 \
-              margin_left=0 \
-              margin_right=0
+# メモリ表示を一時停止（表示不要のためコメントアウト）
+# sketchybar --add item ram right \
+#    --set ram script="$PLUGIN_DIR/ram_min.sh" \
+#               update_freq=15 \
+#               icon="󰍛" \
+#               padding_left=4 \
+#               padding_right=4 \
+#               margin_left=0 \
+#               margin_right=0
 
 ##### External Storage with Popup #####
 sketchybar --add item disk right \
