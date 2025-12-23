@@ -7,10 +7,17 @@
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 SKETCHYBAR_BIN="${BAR_NAME:-sketchybar}"
 
+# フェイルセーフ: 空スナップショット時は即終了し、呼び出し元が再試行する
+if [ -z "${WINDOW_SNAPSHOT:-}" ]; then
+  WINDOW_SNAPSHOT=""
+fi
+
 # 許可イベント以外は静かに終了
-case "$SENDER" in
+case "${SENDER:-}" in
+  ""|poll|timer|routine|forced)
+    ;;  # ポーリングや手動実行を許可
   aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
-    ;;  # 許可
+    ;;  # イベント実行も許可
   *)
     exit 0
     ;;
@@ -182,7 +189,17 @@ main() {
   fi
 
   local windows
-  windows="$(aerospace list-windows --workspace "${ws_list[@]}" --format '%{workspace}%{tab}%{app-name}' 2>/dev/null)" || windows=""
+
+  if [ -n "${WINDOW_SNAPSHOT:-}" ]; then
+    windows="$WINDOW_SNAPSHOT"
+    log_debug "Using provided snapshot (${#ws_list[@]} workspaces)"
+  else
+    windows="$(aerospace list-windows --workspace "${ws_list[@]}" --format '%{workspace}%{tab}%{app-name}' 2>/dev/null)" || windows=""
+    if [ -z "$windows" ]; then
+      log_debug "Empty snapshot; skipping update"
+      return 0
+    fi
+  fi
 
   local grouped
   grouped="$(

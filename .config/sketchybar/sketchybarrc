@@ -172,11 +172,12 @@ for sid in $(seq $workspace_min $workspace_max); do
   fi
 done
 
-# 不可視アイテムを用意してワークスペースアイコン更新を1回に集約する。
+# 不可視アイテム: イベント＋ポーリングでアイコンを更新する。
 sketchybar --add item workspace.refresh center \
   --set workspace.refresh \
     drawing=off \
     script="$CONFIG_DIR/plugins/workspace_events.sh" \
+    update_freq=${WORKSPACE_POLL_SECS:-1} \
   --subscribe workspace.refresh \
     window_created \
     window_destroyed \

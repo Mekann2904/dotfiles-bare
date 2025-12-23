@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # plugins/workspace_events.sh
-# 超シンプルなワークスペースイベントハンドラ
-# ロックを完全に排除し、即時実行で確実性を確保
-# 関連ファイル: sketchybarrc, plugins/update_single_workspace.sh, plugins/aerospace.sh, plugins/update_workspace_icons.sh
+# ワークスペース・アプリ監視の軽量ポーリング＋イベントエントリーポイント。
+# AeroSpaceイベントと定期ポーリングを併用し、安定かつ高速にアイコン更新するために存在する。
+# 関連ファイル: sketchybarrc, plugins/update_single_workspace.sh, plugins/space_windows.sh, plugins/icon_map_fn.sh
 
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 UPDATE_SCRIPT="$CONFIG_DIR/plugins/update_single_workspace.sh"
 
-# --- Debug log setup (open FD once) ---
+# --- チューニング値 ---
+MIN_INTERVAL_DEFAULT_NS=300000000   # 0.3s をナノ秒表現
+POLL_INTERVAL_DEFAULT=0.7           # update_freq からのフォールバック
+STATE_FILE="${POLL_STATE_FILE:-/tmp/sketchybar_ws_state.tsv}"
+SECOND_PASS_DELAY="${SECOND_PASS_DELAY:-0.35}" # アプリ起動直後の追いかけ再走査
+
+# --- ログ設定 ---
 if [ -n "${DEBUG_LOG:-}" ]; then
   DEBUG_LOG="${DEBUG_LOG:-/tmp/sketchybar_simple.log}"
 elif [ "${SKETCHYBAR_WS_DEBUG:-}" = "1" ]; then
@@ -18,37 +24,46 @@ fi
 
 if [ -n "$DEBUG_LOG" ]; then
   exec 3>>"$DEBUG_LOG"
-  log() { printf '%s [SIMPLE] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&3; }
+  log() { printf '%s [EVT] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&3; }
 else
   log() { :; }
 fi
 
 log "Event: SENDER=${SENDER:-} INFO=${INFO:-}"
 
-# --- Event filter: 対象イベント以外は即終了して無駄なプロセスを抑制 ---
+# --- 実行スロットル: イベントは優先、ポーリングのみ間引く ---
+POLL_INTERVAL="${WORKSPACE_POLL_SECS:-$POLL_INTERVAL_DEFAULT}"
+POLL_LOCK="${POLL_LOCK:-/tmp/sketchybar_ws_poll.lock}"
+
+force_event=0
 case "${SENDER:-}" in
-  aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
-    ;;  # 許可
-  *)
-    log "Skip sender=$SENDER"
-    [ -n "$DEBUG_LOG" ] && exec 3>&-
-    exit 0
-    ;;
+  application_launched|application_terminated|window_created|window_destroyed|front_app_switched)
+    force_event=1 ;;
 esac
 
-# window create/destroy は WM 側の状態反映が遅れることがあるため、わずかにデバウンス
-case "${SENDER:-}" in
-  window_created|window_destroyed) sleep 0.03 ;; # 30ms
-esac
+if [ "$force_event" -ne 1 ]; then
+  NOW_TS=$(date +%s%N)
+  if [ -f "$POLL_LOCK" ]; then
+    LAST_TS=$(cat "$POLL_LOCK" 2>/dev/null || echo 0)
+    THRESHOLD_NS=$(printf '%.0f\n' "$(echo "$POLL_INTERVAL * 1000000000" | bc -l 2>/dev/null || awk -v v="$POLL_INTERVAL" 'BEGIN{printf "%.0f",v*1000000000}')" )
+    DELTA=$((NOW_TS - LAST_TS))
+    if [ "$DELTA" -lt "$THRESHOLD_NS" ] && [ "$DELTA" -lt "$MIN_INTERVAL_DEFAULT_NS" ]; then
+      log "Skip: throttled (Δ=${DELTA}ns < ${THRESHOLD_NS}ns)"
+      [ -n "$DEBUG_LOG" ] && exec 3>&-
+      exit 0
+    fi
+  fi
+  printf '%s' "$NOW_TS" > "$POLL_LOCK" 2>/dev/null || true
+fi
 
-# --- Preflight checks ---
+# --- エントリーポイント ---
 if [ ! -x "$UPDATE_SCRIPT" ]; then
-  log "ERROR: Update script not found or not executable: $UPDATE_SCRIPT"
+  log "ERROR: update script missing: $UPDATE_SCRIPT"
   [ -n "$DEBUG_LOG" ] && exec 3>&-
   exit 1
 fi
 
-# Resolve aerospace once
+# AeroSpace存在確認
 AEROSPACE_BIN="$(type -P aerospace 2>/dev/null || true)"
 if [ -z "$AEROSPACE_BIN" ]; then
   export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -59,60 +74,150 @@ if [ -z "$AEROSPACE_BIN" ]; then
   [ -n "$DEBUG_LOG" ] && exec 3>&-
   exit 1
 fi
-log "aerospace command: $AEROSPACE_BIN"
 
-# --- Helpers ---
-extract_workspaces() {
-  local s="$1" tok out=""
-  s="${s//[^0-9]/ }"
-  for tok in $s; do
-    case " $out " in
-      *" $tok "*) : ;;
-      *) out="$out $tok" ;;
-    esac
-  done
-  for tok in $out; do
-    [ -n "$tok" ] && printf '%s\n' "$tok"
-  done
+# --- スナップショット取得（失敗時は短い遅延後に再試行） ---
+capture_snapshot() {
+  aerospace list-windows --all --format '%{workspace}%{tab}%{app-name}' 2>/dev/null || true
 }
 
-get_focused_workspace() {
-  "$AEROSPACE_BIN" list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]'
+WINDOW_SNAPSHOT="$(capture_snapshot)"
+if [ -z "$WINDOW_SNAPSHOT" ]; then
+  sleep 0.15
+  WINDOW_SNAPSHOT="$(capture_snapshot)"
+fi
+export WINDOW_SNAPSHOT
+
+MIN_WORKSPACE_NUM=${MIN_WORKSPACE:-1}
+MAX_WORKSPACE_NUM=${WORKSPACE_RANGE_MAX:-${MAX_WORKSPACE:-7}}
+
+# スナップショットからWS IDを抽出（順序維持・重複排除）
+snapshot_workspaces() {
+  printf '%s\n' "$WINDOW_SNAPSHOT" | awk -F'\t' '
+    {
+      ws=$1
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", ws)
+      if (ws=="" || seen[ws]++) next
+      order[++n]=ws
+    }
+    END { for(i=1;i<=n;i++) print order[i] }
+  '
 }
 
-# --- Target resolution ---
+# WSごとの差分状態を生成（空ワークスペースも含める）
+build_state_lines() {
+  awk -F'\t' -v min="$MIN_WORKSPACE_NUM" -v max="$MAX_WORKSPACE_NUM" -v sep="\034" '
+    NR==FNR { order[++n]=$1; next }
+    {
+      ws=$1; app=$2
+      sub(/^[[:space:]]+|[[:space:]]+$/, "", ws)
+      sub(/^[[:space:]]+|[[:space:]]+$/, "", app)
+      if (ws=="" || ws<min || ws>max) next
+      key=ws SUBSEP app
+      if (seen[key]++) next
+      if (apps[ws]=="") apps[ws]=app; else apps[ws]=apps[ws] sep app
+    }
+    END {
+      for (i=1; i<=n; i++) {
+        ws=order[i]
+        print ws "\t" apps[ws]
+      }
+    }
+  ' <(seq "$MIN_WORKSPACE_NUM" "$MAX_WORKSPACE_NUM") <(printf '%s\n' "$WINDOW_SNAPSHOT")
+}
+
+OLD_STATE="$(cat "$STATE_FILE" 2>/dev/null || true)"
+NEW_STATE="$(build_state_lines)"
+
+collect_changed_ws() {
+  local changed_ws=()
+  while IFS=$'\t' read -r ws apps; do
+    [ -n "$ws" ] || continue
+    old_line=$(printf '%s\n' "$OLD_STATE" | awk -F'\t' -v w="$ws" '$1==w{print $0; exit}')
+    new_line="$ws\t$apps"
+    if [ "$old_line" != "$new_line" ]; then
+      changed_ws+=("$ws")
+    fi
+  done <<<"$NEW_STATE"
+  printf '%s\n' "${changed_ws[@]}" | tr ' ' '\n' | sed '/^$/d'
+}
+
+mapfile -t diff_targets < <(collect_changed_ws)
+printf '%s\n' "$NEW_STATE" > "$STATE_FILE" 2>/dev/null || true
+
+# diff が無ければ終了（ポーリング時のみ）。イベントは強制で続行。
+if [ ${#diff_targets[@]} -eq 0 ] && [ "$force_event" -ne 1 ]; then
+  log "No changes detected; skip update"
+  [ -n "$DEBUG_LOG" ] && exec 3>&-
+  exit 0
+fi
+
+# --- メイン実行: 差分対象のみ更新 ---
 targets=()
-
-if [ -n "${INFO:-}" ]; then
-  if ws_list="$(extract_workspaces "$INFO")" && [ -n "$ws_list" ]; then
-    while IFS= read -r ws; do
-      targets+=("$ws")
-    done <<EOF
-$ws_list
-EOF
-    log "INFO-derived targets: ${targets[*]}"
-  fi
+if [ ${#diff_targets[@]} -gt 0 ]; then
+  targets=("${diff_targets[@]}")
+elif [ -n "${INFO:-}" ]; then
+  while read -r tok; do
+    case "$tok" in ''|*[!0-9]*) continue;; esac
+    targets+=("$tok")
+  done < <(printf '%s' "${INFO//[^0-9]/ }")
 fi
 
-if [ "${#targets[@]}" -eq 0 ]; then
-  focused="$(get_focused_workspace)"
-  if [ -n "$focused" ]; then
-    targets=("$focused")
-    log "Focus-derived target: $focused"
-  fi
+if [ ${#targets[@]} -eq 0 ]; then
+  case "${SENDER:-}" in
+    application_launched|application_terminated|window_created|window_destroyed)
+      mapfile -t targets < <(snapshot_workspaces)
+      ;;
+    *)
+      focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
+      [ -n "$focused" ] && targets=("$focused")
+      ;;
+  esac
 fi
 
-# --- Execute update ---
-if [ "${#targets[@]}" -eq 0 ]; then
-  log "No target found; updating all"
-  DEBUG_LOG="/tmp/sketchybar_fast_update.log" "$UPDATE_SCRIPT"
-  EXIT_CODE=$?
+if [ ${#targets[@]} -eq 0 ]; then
+  log "Running update for all workspaces (poll)"
+  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT"
 else
-  log "Updating targets: ${targets[*]}"
-  DEBUG_LOG="/tmp/sketchybar_fast_update.log" "$UPDATE_SCRIPT" "${targets[@]}"
-  EXIT_CODE=$?
+  log "Running update for: ${targets[*]}"
+  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}"
 fi
 
-log "Execution completed with exit code: $EXIT_CODE"
+# --- アプリ起動/終了は少し遅らせてもう一度（遅延反映バグ対策） ---
+if [ "$force_event" -eq 1 ]; then
+  ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
+fi
+
+# --- ターゲット解決 ---
+targets=()
+if [ -n "${INFO:-}" ]; then
+  # INFOがあれば数字を抽出
+  while read -r tok; do
+    case "$tok" in ''|*[!0-9]*) continue;; esac
+    targets+=("$tok")
+  done < <(printf '%s' "${INFO//[^0-9]/ }")
+fi
+
+if [ ${#targets[@]} -eq 0 ]; then
+  case "${SENDER:-}" in
+    application_launched|application_terminated|window_created|window_destroyed)
+      mapfile -t targets < <(snapshot_workspaces)
+      ;;
+    *)
+      focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
+      [ -n "$focused" ] && targets=("$focused")
+      ;;
+  esac
+fi
+
+# --- 実行 ---
+if [ ${#targets[@]} -eq 0 ]; then
+  log "Running update for all workspaces (poll)"
+  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT"
+else
+  log "Running update for: ${targets[*]}"
+  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}"
+fi
+
+log "Done"
 [ -n "$DEBUG_LOG" ] && exec 3>&-
-exit "$EXIT_CODE"
+exit 0

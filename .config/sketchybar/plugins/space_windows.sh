@@ -6,10 +6,11 @@
 
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 
-# aeroSpace の可視ワークスペース変化イベントのみ処理
-if [ "$SENDER" != "aerospace_workspace_change" ]; then
-  exit 0
-fi
+# aeroSpaceイベントと定期ポーリングの双方から呼ばれる。
+case "${SENDER:-}" in
+  aerospace_workspace_change|poll|timer|routine|forced) : ;;  # 許可
+  *) exit 0;;
+esac
 
 # アイコンキャッシュ（同一アプリでのフォーク回数を抑える）
 cache_apps=()
