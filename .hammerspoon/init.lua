@@ -1,3 +1,7 @@
+-- /Users/mekann/.hammerspoon/init.lua
+-- Hammerspoon のホットキーと AeroSpace 連携を管理する設定
+-- AeroSpace 側のホットキーと競合しないように制御するため
+-- 関連ファイル: ~/.config/aerospace/aerospace.toml, ~/.hammerspoon/Spoons, /Users/mekann/.hammerspoon/init.lua
 -- ==============================================================================
 -- ┌────────────────────────────────────────────────────────────────────────────┐
 -- │                                                                            │
@@ -31,6 +35,21 @@ local DIR_DOWN        = "next"
 local TASK_TIMEOUT    = 1.5
 local DOUBLE_ALT_GAP  = 0.35
 
+-- AeroSpace に Alt+N/B を渡す場合は false にする
+local ENABLE_HAMMERSPOON_ALT_NB = false
+
+-- スクロール操作を AeroSpace のホットキーに変換する場合は true
+local USE_AEROSPACE_HOTKEYS = true
+
+-- Alt+クリックでワークスペース切替を行う場合は true
+local ENABLE_ALT_CLICK = true
+
+-- Alt+右クリック/Alt+ひらりクリックの割り当て
+local ALT_CLICK_MAP = {
+  right = DIR_DOWN,
+  left = DIR_UP,
+}
+
 -- Alt 押下中のスクロール抑止
 local ALT_BLOCK_SCROLL   = true
 local ALT_RELEASE_GRACE  = 0.12
@@ -58,6 +77,36 @@ end
 -- ========= 操作種別 =========
 local OP_WORKSPACE = "workspace"   -- ワークスペース切替
 local OP_MOVE_NODE = "move-node"   -- ウィンドウを前後WSへ移動
+
+-- ========= AeroSpace ホットキー変換 =========
+local AEROSPACE_HOTKEYS = {
+  switch = {
+    prev = {mods = {"alt"},          key = "b"},
+    next = {mods = {"alt"},          key = "n"},
+  },
+  move = {
+    prev = {mods = {"alt", "shift"}, key = "b"},
+    next = {mods = {"alt", "shift"}, key = "n"},
+  },
+}
+
+local function sendAerospaceHotkey(dir, op)
+  local map = (op == OP_MOVE_NODE) and AEROSPACE_HOTKEYS.move or AEROSPACE_HOTKEYS.switch
+  local def = (dir == DIR_UP) and map.prev or map.next
+  if not def then return end
+
+  -- 明示的に keyDown/keyUp を発火して確実に送る
+  hs.eventtap.event.newKeyEvent(def.mods, def.key, true):post()
+  hs.eventtap.event.newKeyEvent(def.mods, def.key, false):post()
+end
+
+local function triggerAerospace(dir, op)
+  if USE_AEROSPACE_HOTKEYS then
+    sendAerospaceHotkey(dir, op)
+  else
+    runAerospace(dir, op)
+  end
+end
 
 -- ========= AeroSpace 実行（唯一の関数） =========
 local function runAerospace(dir, op)
@@ -197,14 +246,14 @@ local function flushSwitch()
   debounceSwitch = nil
   local s = sumSwitch; sumSwitch = 0
   if s == 0 or math.abs(s) < STEP_THRESHOLD then return end
-  runAerospace((s > 0) and DIR_UP or DIR_DOWN, OP_WORKSPACE)
+  triggerAerospace((s > 0) and DIR_UP or DIR_DOWN, OP_WORKSPACE)
 end
 
 local function flushMove()
   debounceMove = nil
   local s = sumMove; sumMove = 0
   if s == 0 or math.abs(s) < STEP_THRESHOLD then return end
-  runAerospace((s > 0) and DIR_UP or DIR_DOWN, OP_MOVE_NODE)
+  triggerAerospace((s > 0) and DIR_UP or DIR_DOWN, OP_MOVE_NODE)
 end
 
 -- ========= Alt+Wheel / Alt+Shift+Wheel =========
@@ -245,8 +294,42 @@ workspaceAltWheelTap = hs.eventtap.new({hs.eventtap.event.types.scrollWheel}, fu
 end)
 workspaceAltWheelTap:start()
 
+-- ========= Alt+Right / Alt+Other Click =========
+if altClickTap then altClickTap:stop() end
+altClickTap = hs.eventtap.new({
+  hs.eventtap.event.types.rightMouseDown,
+  hs.eventtap.event.types.leftMouseDown,
+}, function(e)
+  if not ENABLE_ALT_CLICK then
+    return false
+  end
+
+  local flags = e:getFlags()
+  if not flags.alt then
+    return false
+  end
+
+  local t = e:getType()
+  if t == hs.eventtap.event.types.rightMouseDown then
+    triggerAerospace(ALT_CLICK_MAP.right, OP_WORKSPACE)
+    return true
+  end
+
+  if t == hs.eventtap.event.types.leftMouseDown then
+    triggerAerospace(ALT_CLICK_MAP.left, OP_WORKSPACE)
+    return true
+  end
+
+  return false
+end)
+altClickTap:start()
+
 -- ========= Alt+N/P / Alt+Shift+N/P =========
 local function bindWorkspaceHotkeys()
+  if not ENABLE_HAMMERSPOON_ALT_NB then
+    return
+  end
+
   -- Alt 系は切替、Alt+Shift 系はノード移動
   local bindings = {
     {mods = {"alt"},            key = "n", dir = DIR_DOWN, op = OP_WORKSPACE},
@@ -265,4 +348,14 @@ bindWorkspaceHotkeys()
 
 -- ========= ユーティリティ =========
 hs.hotkey.bind({"cmd","alt","ctrl"}, "R", function() hs.reload() end)
-hs.alert.show("Alt+Wheel: switch / Alt+Shift+Wheel: move window / Alt+N,B: switch / Alt+Shift+N,B: move window")
+local alertParts = {
+  "Alt+Wheel: switch",
+  "Alt+Shift+Wheel: move window",
+}
+if ENABLE_ALT_CLICK then
+  table.insert(alertParts, "Alt+Right: next / Alt+Left: prev")
+end
+if ENABLE_HAMMERSPOON_ALT_NB then
+  table.insert(alertParts, "Alt+N,B: switch / Alt+Shift+N,B: move window")
+end
+hs.alert.show(table.concat(alertParts, " / "))
