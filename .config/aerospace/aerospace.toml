@@ -110,15 +110,24 @@ alt-g = 'balance-sizes'
 # 次/前のワークスペースへ（*-hidden は巡回対象外）
 alt-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
+  | grep -v -- '^T$' \
   | aerospace workspace --stdin --wrap-around next"'''
 
 alt-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
+  | grep -v -- '^T$' \
   | aerospace workspace --stdin --wrap-around prev"'''
 
 # アプリを移動
-alt-shift-n = 'move-node-to-workspace --wrap-around --focus-follows-window next'
-alt-shift-b = 'move-node-to-workspace --wrap-around --focus-follows-window prev'
+alt-shift-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
+  | grep -v -- '-hidden$' \
+  | grep -v -- '^T$' \
+  | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window next"'''
+
+alt-shift-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
+  | grep -v -- '-hidden$' \
+  | grep -v -- '^T$' \
+  | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window prev"'''
 
 # 疑似ミニマイズ／復帰
 alt-m = '''exec-and-forget /Users/mekann/.config/aerospace/scripts/pseudo-minimize.sh'''
@@ -214,3 +223,4 @@ run = ['layout tiling']
 5 = 'secondary'
 6 = 'secondary'
 7 = 'secondary'
+T = 'secondary'
