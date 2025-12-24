@@ -16,7 +16,7 @@
 -- ==============================================================================
 
 -- /Users/mekann/.hammerspoon/init.lua
--- Alt+Wheel / Alt+Shift+Wheel / Alt+N,P / Alt+Shift+N,P によるワークスペース制御
+-- Alt+Wheel(T/通常/D) / Alt+Shift+Wheel / Alt+N,B / Alt+Shift+N,B によるワークスペース制御
 -- AeroSpace CLI を通じて、切替と「ウィンドウを連れて移動」を安定提供
 -- 関連: ~/.config/aerospace/aerospace.toml, ~/.hammerspoon/Spoons
 
@@ -30,8 +30,11 @@ local KITTY_CANDIDATES = {
 
 local IDLE_GAP        = 0.10
 local STEP_THRESHOLD  = 1
-local DIR_UP          = "prev"
-local DIR_DOWN        = "next"
+local DIR_UP             = "prev"
+local DIR_DOWN           = "next"
+local WORKSPACE_T        = "T"
+local WORKSPACE_D        = "D"
+local NORMAL_WS_PATTERN  = "^[1-7]$"
 local TASK_TIMEOUT    = 1.5
 local DOUBLE_ALT_GAP  = 0.35
 
@@ -44,6 +47,7 @@ local USE_AEROSPACE_HOTKEYS = true
 -- Alt+クリックでワークスペース切替を行う場合は true
 local ENABLE_ALT_CLICK = true
 
+-- Alt+クリックは通常ワークスペース(1-7)のみ移動
 -- Alt+右クリック/Alt+ひらりクリックの割り当て
 local ALT_CLICK_MAP = {
   right = DIR_DOWN,
@@ -75,8 +79,10 @@ local function resetTaskState()
 end
 
 -- ========= 操作種別 =========
-local OP_WORKSPACE = "workspace"   -- ワークスペース切替
-local OP_MOVE_NODE = "move-node"   -- ウィンドウを前後WSへ移動
+local OP_WORKSPACE        = "workspace"        -- ワークスペース切替
+local OP_WORKSPACE_ID     = "workspace-id"     -- 指定ワークスペースへ移動
+local OP_WORKSPACE_NORMAL = "workspace-normal" -- 通常WS(1-7)のみで移動
+local OP_MOVE_NODE        = "move-node"        -- ウィンドウを前後WSへ移動
 
 -- ========= AeroSpace ホットキー変換 =========
 local AEROSPACE_HOTKEYS = {
@@ -108,7 +114,7 @@ local function triggerAerospace(dir, op)
   end
 end
 
--- ========= AeroSpace 実行（唯一の関数） =========
+-- ========= AeroSpace 実行ヘルパー =========
 local function runAerospace(dir, op)
   if not fileExists(AEROSPACE) then
     hs.alert.show("aerospace が見つからない: "..AEROSPACE)
@@ -123,6 +129,23 @@ local function runAerospace(dir, op)
     execPath = AEROSPACE
     execArgs = {"move-node-to-workspace", "--wrap-around", "--focus-follows-window", dir}
     label = "move-node"
+  elseif op == OP_WORKSPACE_ID then
+    -- ワークスペースを直接指定して移動
+    execPath = AEROSPACE
+    execArgs = {"workspace", dir}
+    label = "workspace-id"
+  elseif op == OP_WORKSPACE_NORMAL then
+    -- 通常ワークスペース(1-7)のみ巡回
+    local cmd = string.format(
+      "%q list-workspaces --monitor focused --format '%%{workspace}' | grep -E '%s' | %q workspace --stdin --wrap-around %s",
+      AEROSPACE,
+      NORMAL_WS_PATTERN,
+      AEROSPACE,
+      dir
+    )
+    execPath = "/bin/bash"
+    execArgs = {"-lc", cmd}
+    label = "workspace-normal"
   else
     -- モニター内の妥当なワークスペースに絞ってから wrap-around で移動
     local cmd = string.format("%q list-workspaces --monitor focused | %q workspace --wrap-around %s", AEROSPACE, AEROSPACE, dir)
@@ -146,6 +169,79 @@ local function runAerospace(dir, op)
     resetTaskState()
     hs.alert.show("aerospace 応答なしでタイムアウト: "..label.." "..dir)
   end)
+end
+
+-- ========= ワークスペース取得 =========
+local lastNormalWorkspace = nil
+
+local function trim(s)
+  return (s:gsub("%s+$", ""))
+end
+
+local function getFocusedWorkspace()
+  if not fileExists(AEROSPACE) then return nil end
+  local cmd = string.format("%q list-workspaces --focused --format '%%{workspace}'", AEROSPACE)
+  local out = hs.execute(cmd)
+  if not out then return nil end
+  out = trim(out)
+  if out == "" then return nil end
+  return out
+end
+
+local function isNormalWorkspace(ws)
+  return ws and ws:match(NORMAL_WS_PATTERN) ~= nil
+end
+
+local function getNormalWorkspaceFallback()
+  if not fileExists(AEROSPACE) then return nil end
+  local cmd = string.format("%q list-workspaces --monitor focused --format '%%{workspace}'", AEROSPACE)
+  local out = hs.execute(cmd) or ""
+  for ws in out:gmatch("[^\r\n]+") do
+    if ws:match(NORMAL_WS_PATTERN) then
+      return ws
+    end
+  end
+  return nil
+end
+
+local function getNormalWorkspaceForReturn()
+  if isNormalWorkspace(lastNormalWorkspace) then
+    return lastNormalWorkspace
+  end
+  return getNormalWorkspaceFallback()
+end
+
+local function moveAltScroll(dir)
+  local focused = getFocusedWorkspace()
+  if not focused then return end
+
+  if isNormalWorkspace(focused) then
+    lastNormalWorkspace = focused
+  end
+
+  if dir == DIR_UP then
+    if focused == WORKSPACE_T then
+      return
+    end
+    if focused == WORKSPACE_D then
+      local target = getNormalWorkspaceForReturn()
+      if target then runAerospace(target, OP_WORKSPACE_ID) end
+      return
+    end
+    runAerospace(WORKSPACE_T, OP_WORKSPACE_ID)
+    return
+  end
+
+  -- DIR_DOWN
+  if focused == WORKSPACE_D then
+    return
+  end
+  if focused == WORKSPACE_T then
+    local target = getNormalWorkspaceForReturn()
+    if target then runAerospace(target, OP_WORKSPACE_ID) end
+    return
+  end
+  runAerospace(WORKSPACE_D, OP_WORKSPACE_ID)
 end
 
 -- ========= Alt/Shift 抑止ロジック =========
@@ -246,7 +342,9 @@ local function flushSwitch()
   debounceSwitch = nil
   local s = sumSwitch; sumSwitch = 0
   if s == 0 or math.abs(s) < STEP_THRESHOLD then return end
-  triggerAerospace((s > 0) and DIR_UP or DIR_DOWN, OP_WORKSPACE)
+  -- Alt+Wheel は T / 通常 / D の三点移動
+  local dir = (s > 0) and DIR_UP or DIR_DOWN
+  moveAltScroll(dir)
 end
 
 local function flushMove()
@@ -283,7 +381,7 @@ workspaceAltWheelTap = hs.eventtap.new({hs.eventtap.event.types.scrollWheel}, fu
       if debounceMove then debounceMove:stop() end
       debounceMove = hs.timer.doAfter(IDLE_GAP, flushMove)
     else
-      -- Alt+Wheel → ワークスペース切替
+      -- Alt+Wheel → T / 通常 / D の切替
       sumSwitch = sumSwitch + dy
       if debounceSwitch then debounceSwitch:stop() end
       debounceSwitch = hs.timer.doAfter(IDLE_GAP, flushSwitch)
@@ -311,12 +409,12 @@ altClickTap = hs.eventtap.new({
 
   local t = e:getType()
   if t == hs.eventtap.event.types.rightMouseDown then
-    triggerAerospace(ALT_CLICK_MAP.right, OP_WORKSPACE)
+    runAerospace(ALT_CLICK_MAP.right, OP_WORKSPACE_NORMAL)
     return true
   end
 
   if t == hs.eventtap.event.types.leftMouseDown then
-    triggerAerospace(ALT_CLICK_MAP.left, OP_WORKSPACE)
+    runAerospace(ALT_CLICK_MAP.left, OP_WORKSPACE_NORMAL)
     return true
   end
 
@@ -324,7 +422,7 @@ altClickTap = hs.eventtap.new({
 end)
 altClickTap:start()
 
--- ========= Alt+N/P / Alt+Shift+N/P =========
+-- ========= Alt+N/B / Alt+Shift+N/B =========
 local function bindWorkspaceHotkeys()
   if not ENABLE_HAMMERSPOON_ALT_NB then
     return
@@ -349,11 +447,11 @@ bindWorkspaceHotkeys()
 -- ========= ユーティリティ =========
 hs.hotkey.bind({"cmd","alt","ctrl"}, "R", function() hs.reload() end)
 local alertParts = {
-  "Alt+Wheel: switch",
+  "Alt+Wheel: T / normal / D",
   "Alt+Shift+Wheel: move window",
 }
 if ENABLE_ALT_CLICK then
-  table.insert(alertParts, "Alt+Right: next / Alt+Left: prev")
+  table.insert(alertParts, "Alt+Right: next normal / Alt+Left: prev normal")
 end
 if ENABLE_HAMMERSPOON_ALT_NB then
   table.insert(alertParts, "Alt+N,B: switch / Alt+Shift+N,B: move window")

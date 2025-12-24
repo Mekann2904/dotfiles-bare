@@ -111,22 +111,26 @@ alt-g = 'balance-sizes'
 alt-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
   | grep -v -- '^T$' \
+  | grep -v -- '^D$' \
   | aerospace workspace --stdin --wrap-around next"'''
 
 alt-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
   | grep -v -- '^T$' \
+  | grep -v -- '^D$' \
   | aerospace workspace --stdin --wrap-around prev"'''
 
 # アプリを移動
 alt-shift-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
   | grep -v -- '^T$' \
+  | grep -v -- '^D$' \
   | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window next"'''
 
 alt-shift-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
   | grep -v -- '^T$' \
+  | grep -v -- '^D$' \
   | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window prev"'''
 
 # 疑似ミニマイズ／復帰
@@ -209,9 +213,14 @@ run = ['layout tiling']
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Default space
+# $ aerospace list-apps
 #[[on-window-detected]]
 #if.app-id = 'com.brave.Browser'
 #run = ['move-node-to-workspace 1']
+[[on-window-detected]]
+if.app-id = "com.spotify.client"
+run = "move-node-to-workspace T"
+
 
 
 # force certain workspaces to certain monitors
@@ -224,3 +233,4 @@ run = ['layout tiling']
 6 = 'secondary'
 7 = 'secondary'
 T = 'secondary'
+D = 'secondary'
