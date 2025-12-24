@@ -221,6 +221,8 @@ local function moveAltScroll(dir)
 
   if dir == DIR_UP then
     if focused == WORKSPACE_T then
+      -- ループ: T から D へ
+      runAerospace(WORKSPACE_D, OP_WORKSPACE_ID)
       return
     end
     if focused == WORKSPACE_D then
@@ -234,6 +236,8 @@ local function moveAltScroll(dir)
 
   -- DIR_DOWN
   if focused == WORKSPACE_D then
+    -- ループ: D から T へ
+    runAerospace(WORKSPACE_T, OP_WORKSPACE_ID)
     return
   end
   if focused == WORKSPACE_T then
