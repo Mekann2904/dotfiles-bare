@@ -90,14 +90,19 @@ local AEROSPACE_HOTKEYS = {
     prev = {mods = {"alt"},          key = "b"},
     next = {mods = {"alt"},          key = "n"},
   },
-  move = {
+  -- Alt+Shift+Scroll は T/D に送る（AeroSpace 側の割り当てに合わせる）
+  move_scroll = {
+    prev = {mods = {"alt", "shift"}, key = "t"},
+    next = {mods = {"alt", "shift"}, key = "d"},
+  },
+  -- Alt+Shift+Click は B/N に送る
+  move_click = {
     prev = {mods = {"alt", "shift"}, key = "b"},
     next = {mods = {"alt", "shift"}, key = "n"},
   },
 }
 
-local function sendAerospaceHotkey(dir, op)
-  local map = (op == OP_MOVE_NODE) and AEROSPACE_HOTKEYS.move or AEROSPACE_HOTKEYS.switch
+local function sendAerospaceHotkey(dir, map)
   local def = (dir == DIR_UP) and map.prev or map.next
   if not def then return end
 
@@ -108,7 +113,8 @@ end
 
 local function triggerAerospace(dir, op)
   if USE_AEROSPACE_HOTKEYS then
-    sendAerospaceHotkey(dir, op)
+    local map = (op == OP_MOVE_NODE) and AEROSPACE_HOTKEYS.move_scroll or AEROSPACE_HOTKEYS.switch
+    sendAerospaceHotkey(dir, map)
   else
     runAerospace(dir, op)
   end
@@ -411,14 +417,32 @@ altClickTap = hs.eventtap.new({
     return false
   end
 
+  local shiftActive = flags.shift or false
+
   local t = e:getType()
   if t == hs.eventtap.event.types.rightMouseDown then
-    runAerospace(ALT_CLICK_MAP.right, OP_WORKSPACE_NORMAL)
+    if shiftActive then
+      if USE_AEROSPACE_HOTKEYS then
+        sendAerospaceHotkey(ALT_CLICK_MAP.right, AEROSPACE_HOTKEYS.move_click)
+      else
+        runAerospace(ALT_CLICK_MAP.right, OP_MOVE_NODE)
+      end
+    else
+      runAerospace(ALT_CLICK_MAP.right, OP_WORKSPACE_NORMAL)
+    end
     return true
   end
 
   if t == hs.eventtap.event.types.leftMouseDown then
-    runAerospace(ALT_CLICK_MAP.left, OP_WORKSPACE_NORMAL)
+    if shiftActive then
+      if USE_AEROSPACE_HOTKEYS then
+        sendAerospaceHotkey(ALT_CLICK_MAP.left, AEROSPACE_HOTKEYS.move_click)
+      else
+        runAerospace(ALT_CLICK_MAP.left, OP_MOVE_NODE)
+      end
+    else
+      runAerospace(ALT_CLICK_MAP.left, OP_WORKSPACE_NORMAL)
+    end
     return true
   end
 
@@ -456,6 +480,7 @@ local alertParts = {
 }
 if ENABLE_ALT_CLICK then
   table.insert(alertParts, "Alt+Right: next normal / Alt+Left: prev normal")
+  table.insert(alertParts, "Alt+Shift+Right: move next / Alt+Shift+Left: move prev")
 end
 if ENABLE_HAMMERSPOON_ALT_NB then
   table.insert(alertParts, "Alt+N,B: switch / Alt+Shift+N,B: move window")
