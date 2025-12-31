@@ -89,6 +89,52 @@ export WINDOW_SNAPSHOT
 
 MIN_WORKSPACE_NUM=${MIN_WORKSPACE:-1}
 MAX_WORKSPACE_NUM=${WORKSPACE_RANGE_MAX:-${MAX_WORKSPACE:-7}}
+EXTRA_WORKSPACES="${EXTRA_WORKSPACES:-}"
+
+trim() {
+  local v="$1"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  printf '%s' "$v"
+}
+
+numeric_workspaces() {
+  seq "$MIN_WORKSPACE_NUM" "$MAX_WORKSPACE_NUM" 2>/dev/null \
+    || jot - "$MIN_WORKSPACE_NUM" "$MAX_WORKSPACE_NUM" 2>/dev/null \
+    || echo "$MIN_WORKSPACE_NUM $MAX_WORKSPACE_NUM" | awk '{for(i=$1;i<=$2;i++)print i}'
+}
+
+workspace_list() {
+  local w
+  numeric_workspaces
+  for w in $EXTRA_WORKSPACES; do
+    printf '%s\n' "$w"
+  done
+}
+
+is_supported_ws() {
+  local ws="$1"
+  case "$ws" in
+    '' ) return 1 ;;
+    *[!0-9]* ) ;;
+    * )
+      [ "$ws" -ge "$MIN_WORKSPACE_NUM" ] && [ "$ws" -le "$MAX_WORKSPACE_NUM" ]
+      return $? ;;
+  esac
+
+  local extra
+  for extra in $EXTRA_WORKSPACES; do
+    [ "$ws" = "$extra" ] && return 0
+  done
+  return 1
+}
+
+parse_info_targets() {
+  local tok
+  for tok in $(printf '%s' "${INFO:-}" | tr -c '[:alnum:]' ' '); do
+    is_supported_ws "$tok" && printf '%s\n' "$tok"
+  done
+}
 
 # スナップショットからWS IDを抽出（順序維持・重複排除）
 snapshot_workspaces() {
@@ -105,13 +151,13 @@ snapshot_workspaces() {
 
 # WSごとの差分状態を生成（空ワークスペースも含める）
 build_state_lines() {
-  awk -F'\t' -v min="$MIN_WORKSPACE_NUM" -v max="$MAX_WORKSPACE_NUM" -v sep="\034" '
-    NR==FNR { order[++n]=$1; next }
+  awk -F'\t' -v sep="\034" '
+    NR==FNR { order[++n]=$1; want[$1]=1; next }
     {
       ws=$1; app=$2
       sub(/^[[:space:]]+|[[:space:]]+$/, "", ws)
       sub(/^[[:space:]]+|[[:space:]]+$/, "", app)
-      if (ws=="" || ws<min || ws>max) next
+      if (ws=="" || !(ws in want)) next
       key=ws SUBSEP app
       if (seen[key]++) next
       if (apps[ws]=="") apps[ws]=app; else apps[ws]=apps[ws] sep app
@@ -122,7 +168,7 @@ build_state_lines() {
         print ws "\t" apps[ws]
       }
     }
-  ' <(seq "$MIN_WORKSPACE_NUM" "$MAX_WORKSPACE_NUM") <(printf '%s\n' "$WINDOW_SNAPSHOT")
+  ' <(workspace_list) <(printf '%s\n' "$WINDOW_SNAPSHOT")
 }
 
 OLD_STATE="$(cat "$STATE_FILE" 2>/dev/null || true)"
@@ -156,20 +202,19 @@ targets=()
 if [ ${#diff_targets[@]} -gt 0 ]; then
   targets=("${diff_targets[@]}")
 elif [ -n "${INFO:-}" ]; then
-  while read -r tok; do
-    case "$tok" in ''|*[!0-9]*) continue;; esac
-    targets+=("$tok")
-  done < <(printf '%s' "${INFO//[^0-9]/ }")
+  mapfile -t targets < <(parse_info_targets)
 fi
 
 if [ ${#targets[@]} -eq 0 ]; then
   case "${SENDER:-}" in
     application_launched|application_terminated|window_created|window_destroyed)
-      mapfile -t targets < <(snapshot_workspaces)
+      mapfile -t targets < <(snapshot_workspaces | while read -r ws; do is_supported_ws "$ws" && printf '%s\n' "$ws"; done)
       ;;
     *)
       focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
-      [ -n "$focused" ] && targets=("$focused")
+      if [ -n "$focused" ] && is_supported_ws "$focused"; then
+        targets=("$focused")
+      fi
       ;;
   esac
 fi
@@ -190,21 +235,19 @@ fi
 # --- ターゲット解決 ---
 targets=()
 if [ -n "${INFO:-}" ]; then
-  # INFOがあれば数字を抽出
-  while read -r tok; do
-    case "$tok" in ''|*[!0-9]*) continue;; esac
-    targets+=("$tok")
-  done < <(printf '%s' "${INFO//[^0-9]/ }")
+  mapfile -t targets < <(parse_info_targets)
 fi
 
 if [ ${#targets[@]} -eq 0 ]; then
   case "${SENDER:-}" in
     application_launched|application_terminated|window_created|window_destroyed)
-      mapfile -t targets < <(snapshot_workspaces)
+      mapfile -t targets < <(snapshot_workspaces | while read -r ws; do is_supported_ws "$ws" && printf '%s\n' "$ws"; done)
       ;;
     *)
       focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
-      [ -n "$focused" ] && targets=("$focused")
+      if [ -n "$focused" ] && is_supported_ws "$focused"; then
+        targets=("$focused")
+      fi
       ;;
   esac
 fi

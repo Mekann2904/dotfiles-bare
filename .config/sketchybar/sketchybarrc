@@ -27,6 +27,7 @@ export MIN_WORKSPACE=1
 # デフォルトのワークスペース上限。環境変数WORKSPACE_RANGE_MAXを9にすれば即座に1-9へ戻せる。
 export MAX_WORKSPACE_DEFAULT=7
 export MAX_WORKSPACE="${WORKSPACE_RANGE_MAX:-$MAX_WORKSPACE_DEFAULT}"
+export EXTRA_WORKSPACES="T D"
 
 WALLPAPER_PRIMARY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/wallhaven-rqq3gm.png"
 WALLPAPER_KITTY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/kitty.png"
@@ -158,6 +159,109 @@ for sid in $(seq $workspace_min $workspace_max); do
       click_script="aerospace workspace $sid"
 
   if [ "$sid" -lt $workspace_max ]; then
+    sketchybar --add item space.$sid.separator left \
+      --set space.$sid.separator \
+        drawing=on \
+        background.drawing=off \
+        padding_left=8 \
+        padding_right=8 \
+        icon.drawing=off \
+        label="|" \
+        label.drawing=on \
+        label.font="Hack Nerd Font:Semibold:13.0" \
+        label.color=0x66FFFFFF
+  fi
+done
+
+# 追加ワークスペース（T/D）を表示
+special_workspaces=($EXTRA_WORKSPACES)
+if [ "${#special_workspaces[@]}" -gt 0 ]; then
+  sketchybar --add item space.special.separator left \
+    --set space.special.separator \
+      drawing=on \
+      background.drawing=off \
+      padding_left=8 \
+      padding_right=8 \
+      icon.drawing=off \
+      label="|" \
+      label.drawing=on \
+      label.font="Hack Nerd Font:Semibold:13.0" \
+      label.color=0x66FFFFFF
+fi
+
+for idx in "${!special_workspaces[@]}"; do
+  sid="${special_workspaces[$idx]}"
+  sketchybar --add item space.$sid left \
+    --subscribe space.$sid aerospace_workspace_change \
+    --set space.$sid \
+      drawing=on \
+      background.drawing=off \
+      padding_left=6 \
+      padding_right=6 \
+      icon="$sid" \
+      icon.font="Hack Nerd Font:Semibold:16.0" \
+      icon.color=0xffffffff \
+      icon.padding_left=0 \
+      icon.padding_right=4 \
+      label="" \
+      label.drawing=off \
+      click_script="aerospace workspace $sid" \
+      script="$CONFIG_DIR/plugins/aerospace.sh $sid"
+
+  for icon_slot in 1 2 3 4; do
+    sketchybar --add item space.$sid.icon${icon_slot} left \
+      --set space.$sid.icon${icon_slot} \
+        drawing=off \
+        background.drawing=off \
+        padding_left=2 \
+        padding_right=2 \
+        width=24 \
+        icon.drawing=off \
+        icon.width=16 \
+        icon.background.drawing=off \
+        icon.background.height=16 \
+        icon.background.y_offset=0 \
+        icon.background.corner_radius=3 \
+        icon.background.image.scale=0.8 \
+        label="" \
+        label.drawing=off \
+        click_script="aerospace workspace $sid"
+  done
+
+  sketchybar --add bracket space.$sid.underline \
+    space.$sid \
+    space.$sid.icon1 \
+    space.$sid.icon2 \
+    space.$sid.icon3 \
+    space.$sid.icon4 \
+    space.$sid.more \
+    --set space.$sid.underline \
+      drawing=off \
+      background.drawing=off \
+      background.color=0xCCFFFFFF \
+      background.height=2 \
+      background.corner_radius=0 \
+      background.padding_left=0 \
+      background.padding_right=0 \
+      background.y_offset=-12
+
+  sketchybar --add item space.$sid.more left \
+    --set space.$sid.more \
+      drawing=off \
+      padding_left=2 \
+      padding_right=2 \
+      background.drawing=off \
+      width=24 \
+      icon.drawing=off \
+      label="" \
+      label.drawing=off \
+      label.font="Hack Nerd Font:Semibold:12.0" \
+      label.color=0x99FFFFFF \
+      label.padding_left=2 \
+      label.padding_right=2 \
+      click_script="aerospace workspace $sid"
+
+  if [ "$idx" -lt $((${#special_workspaces[@]} - 1)) ]; then
     sketchybar --add item space.$sid.separator left \
       --set space.$sid.separator \
         drawing=on \

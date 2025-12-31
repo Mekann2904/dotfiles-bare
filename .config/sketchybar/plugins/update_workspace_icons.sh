@@ -21,6 +21,7 @@ DEFAULT_MIN_WORKSPACE=1
 DEFAULT_MAX_WORKSPACE=7
 MIN_WORKSPACE=${MIN_WORKSPACE:-$DEFAULT_MIN_WORKSPACE}
 MAX_WORKSPACE=${WORKSPACE_RANGE_MAX:-${MAX_WORKSPACE:-$DEFAULT_MAX_WORKSPACE}}
+EXTRA_WORKSPACES="${EXTRA_WORKSPACES:-}"
 VISIBLE_ICON_SLOTS=${VISIBLE_ICON_SLOTS:-4}
 ICON_WIDTH=${ICON_WIDTH:-16}
 ICON_HEIGHT=${ICON_HEIGHT:-16}
@@ -68,25 +69,49 @@ trim() {
 normalize_ws() {
   local s; s="$(trim "$1")"
   [ -n "$s" ] || return 1
-  local d="${s%%[!0-9]*}"
-  [ -n "$d" ] || return 1
-  printf '%s\n' "$d"
+  printf '%s\n' "$s"
 }
 
 is_supported_ws() {
-  case "$1" in ''|*[!0-9]*) return 1;; esac
-  [ "$1" -ge "$MIN_WORKSPACE" ] && [ "$1" -le "$MAX_WORKSPACE" ]
+  local ws="$1"
+  case "$ws" in
+    '' ) return 1 ;;
+    *[!0-9]* ) ;;
+    * )
+      [ "$ws" -ge "$MIN_WORKSPACE" ] && [ "$ws" -le "$MAX_WORKSPACE" ]
+      return $? ;;
+  esac
+
+  local extra
+  for extra in $EXTRA_WORKSPACES; do
+    [ "$ws" = "$extra" ] && return 0
+  done
+  return 1
+}
+
+numeric_workspaces() {
+  seq "$MIN_WORKSPACE" "$MAX_WORKSPACE" 2>/dev/null \
+    || jot - "$MIN_WORKSPACE" "$MAX_WORKSPACE" 2>/dev/null \
+    || echo "$MIN_WORKSPACE $MAX_WORKSPACE" | awk '{for(i=$1;i<=$2;i++)print i}'
+}
+
+workspace_list() {
+  local w
+  numeric_workspaces
+  for w in $EXTRA_WORKSPACES; do
+    printf '%s\n' "$w"
+  done
 }
 
 collect_windows() {
    # Args: optional workspace ids
    local args=()
-   if [ "$#" -gt 0 ]; then
-     local raw w
-     for raw in "$@"; do
-       w="$(normalize_ws "$raw")" || continue
-       is_supported_ws "$w" || continue
-       args+=(--workspace "$w")
+  if [ "$#" -gt 0 ]; then
+    local raw w
+    for raw in "$@"; do
+      w="$(normalize_ws "$raw")" || continue
+      is_supported_ws "$w" || continue
+      args+=(--workspace "$w")
      done
    fi
    [ "${#args[@]}" -gt 0 ] || args=(--all)
@@ -266,9 +291,8 @@ refresh_all_or_subset() {
       printf '%s\n' "$snapshot" | apps_for_ws "$w" | build_and_apply_updates "$w"
     done
   else
-    # シェル互換性の確保: seqとjotの両方をサポート
     local w
-    for w in $(seq "$MIN_WORKSPACE" "$MAX_WORKSPACE" 2>/dev/null || jot - "$MIN_WORKSPACE" "$MAX_WORKSPACE" 2>/dev/null || echo "$MIN_WORKSPACE $MAX_WORKSPACE" | awk '{for(i=$1;i<=$2;i++)print i}'); do
+    for w in $(workspace_list); do
       log_debug "Processing all workspaces: $w"
       printf '%s\n' "$snapshot" | apps_for_ws "$w" | build_and_apply_updates "$w"
     done

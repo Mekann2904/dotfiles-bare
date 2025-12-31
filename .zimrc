@@ -57,8 +57,8 @@ zmodule Mekann2904/zsh-git         --source git.plugin.zsh
 zmodule Mekann2904/zsh-kitty       --source kitty.plugin.zsh
 zmodule Mekann2904/zsh-eza         --source eza.plugin.zsh
 zmodule Mekann2904/zsh-fgit        --source fgit.plugin.zsh
-#zmodule Mekann2904/zsh-timer-tui   --source timer-tui.plugin.zsh
-#zmodule Mekann2904/zsh-bat
+zmodule Mekann2904/zsh-timer-tui   --source timer-tui.plugin.zsh
+zmodule Mekann2904/zsh-bat
 
 # -----------------------------------------------------------------------------
 # 末尾初期化が必要なモジュール

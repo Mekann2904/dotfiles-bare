@@ -52,6 +52,7 @@ DEFAULT_MIN_WORKSPACE=1
 DEFAULT_MAX_WORKSPACE=7
 MIN_WORKSPACE=${MIN_WORKSPACE:-$DEFAULT_MIN_WORKSPACE}
 MAX_WORKSPACE=${WORKSPACE_RANGE_MAX:-${MAX_WORKSPACE:-$DEFAULT_MAX_WORKSPACE}}
+EXTRA_WORKSPACES="${EXTRA_WORKSPACES:-}"
 
 VISIBLE_ICON_SLOTS=${VISIBLE_ICON_SLOTS:-4}
 ICON_WIDTH=${ICON_WIDTH:-16}
@@ -62,16 +63,51 @@ ICON_IMAGE_SCALE=${ICON_IMAGE_SCALE:-0.8}
 # 区切り文字（アプリ名には通常含まれない制御文字）
 SEP=$'\034'
 
+trim() {
+  local v="$1"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  printf '%s' "$v"
+}
+
 normalize_ws() {
-  local s="$1"
-  local d="${s//[!0-9]/}"
-  [ -n "$d" ] || return 1
-  printf '%s\n' "$d"
+  local s; s="$(trim "$1")"
+  [ -n "$s" ] || return 1
+  printf '%s\n' "$s"
 }
 
 is_supported_ws() {
-  case "$1" in ''|*[!0-9]*) return 1;; esac
-  [ "$1" -ge "$MIN_WORKSPACE" ] && [ "$1" -le "$MAX_WORKSPACE" ]
+  local ws="$1"
+  case "$ws" in
+    '' ) return 1 ;;
+    *[!0-9]* ) ;;
+    * )
+      [ "$ws" -ge "$MIN_WORKSPACE" ] && [ "$ws" -le "$MAX_WORKSPACE" ]
+      return $? ;;
+  esac
+
+  local extra
+  for extra in $EXTRA_WORKSPACES; do
+    [ "$ws" = "$extra" ] && return 0
+  done
+  return 1
+}
+
+workspace_list() {
+  local list=()
+  local i
+  for ((i=MIN_WORKSPACE; i<=MAX_WORKSPACE; i++)); do
+    list+=("$i")
+  done
+  for i in $EXTRA_WORKSPACES; do
+    list+=("$i")
+  done
+  printf '%s\n' "${list[@]}"
+}
+
+parse_info_tokens() {
+  [ -n "${INFO:-}" ] || return 0
+  printf '%s' "$INFO" | tr -c '[:alnum:]' ' ' | awk '{for(i=1;i<=NF;i++)print $i}'
 }
 
 update_workspace_icons() {
@@ -162,7 +198,7 @@ main() {
   if [ "$#" -gt 0 ]; then
     inputs=("$@")
   elif [ -n "$INFO" ]; then
-    inputs=("$INFO")
+    mapfile -t inputs < <(parse_info_tokens)
   fi
 
   local targets=()
@@ -182,10 +218,7 @@ main() {
   if [ "${#targets[@]}" -gt 0 ]; then
     ws_list=("${targets[@]}")
   else
-    local i
-    for ((i=MIN_WORKSPACE; i<=MAX_WORKSPACE; i++)); do
-      ws_list+=("$i")
-    done
+    mapfile -t ws_list < <(workspace_list)
   fi
 
   local windows
