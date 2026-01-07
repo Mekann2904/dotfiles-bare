@@ -17,3 +17,8 @@
 2025-11-25 16:34:55 [TASKS] Using cached tasks data
 2025-11-25 16:34:55 [TASKS] Processed tasks: incomplete=2
 2025-11-25 16:34:55 [TASKS] Tasks updated: icon=󰓾, label=2
+2026-01-07 21:09:27 [DEEPSEEK] DEEPSEEK_API_KEY environment variable not set
+2026-01-07 21:14:48 [DEEPSEEK] Balance retrieved: 1.56
+2026-01-07 21:14:48 [DEEPSEEK] DeepSeek balance updated:  1.56
+2026-01-07 21:14:59 [DEEPSEEK] Balance retrieved: 1.56
+2026-01-07 21:14:59 [DEEPSEEK] DeepSeek balance updated:  1.56
