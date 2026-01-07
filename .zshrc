@@ -412,3 +412,6 @@ load_last_dir
 #eval "$(starship init zsh)"
 
 
+
+# opencode
+export PATH=/Users/mekann/.opencode/bin:$PATH

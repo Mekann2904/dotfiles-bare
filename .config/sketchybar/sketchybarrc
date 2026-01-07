@@ -23,6 +23,8 @@
 PLUGIN_DIR="$CONFIG_DIR/plugins"
 ITEM_DIR="$CONFIG_DIR/items" 
 export MIN_WORKSPACE=1
+# DeepSeek APIキー（https://platform.deepseek.com/api-keys で取得）
+export DEEPSEEK_API_KEY="sk-12179f912fef45fdb11bc1aa8bf30ae5"
 
 # デフォルトのワークスペース上限。環境変数WORKSPACE_RANGE_MAXを9にすれば即座に1-9へ戻せる。
 export MAX_WORKSPACE_DEFAULT=7
@@ -449,6 +451,20 @@ sketchybar --add item clock right \
              margin_left=1 \
              margin_right=1 \
   --subscribe battery system_woke power_source_change \
+  --add item deepseek right \
+  --set deepseek update_freq=300 script="$PLUGIN_DIR/deepseek.sh" \
+              padding_left=1 \
+               drawing=on \
+               padding_right=1 \
+              margin_left=1 \
+              icon="" \
+              icon.background.image="$PLUGIN_DIR/deepseek.png" \
+              icon.background.drawing=on \
+                  icon.background.image.scale=0.01 \
+               icon.background.corner_radius=4 \
+               label.font="Hack Nerd Font:Semibold:12.0" \
+               icon.padding_right=4 \
+               margin_right=1 \
 # Wi-Fi表示を一時停止（表示不要のためコメントアウト）
 #  --add item network right \
 #  --set network update_freq=1 script="$PLUGIN_DIR/network.sh" \
@@ -628,3 +644,6 @@ sketchybar --add item task.close popup.tasks \
 
 ##### Force all scripts to run the first time (never do this in a script) #####
 sketchybar --update
+
+# Force deepseek script to run on startup
+NAME=deepseek "$PLUGIN_DIR/deepseek.sh"
