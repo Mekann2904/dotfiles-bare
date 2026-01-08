@@ -12,11 +12,31 @@ log_debug() {
 
 # API設定
 API_URL="https://my-app.yinyoo2904.workers.dev/api/v1/tasks/today"
-API_KEY="r3iMVBxVM-czqeapGrvYF9DdYHDoiD7XTiwteJQ36Oc"
 
 # キャッシュ設定
 CACHE_FILE="/tmp/sketchybar_tasks_cache"
 CACHE_DURATION=3600  # 1時間キャッシュ
+
+# KeychainからAPIキーを取得する関数
+get_task_api_key() {
+  local service="sketchybar-tasks"
+  local account="api-key"
+  local api_key
+
+  if command -v security >/dev/null 2>&1; then
+    api_key=$(security find-generic-password -s "$service" -a "$account" -w 2>/dev/null)
+    if [ -n "$api_key" ]; then
+      echo "$api_key"
+      return 0
+    else
+      log_debug "API key not found in Keychain (service: $service, account: $account)"
+      return 1
+    fi
+  else
+    log_debug "security command not available"
+    return 1
+  fi
+}
 
 # APIからタスクを取得する関数
 fetch_tasks() {
@@ -25,9 +45,18 @@ fetch_tasks() {
   
   log_debug "Fetching tasks from API"
   
+  # APIキーの確認（Keychainから取得）
+  local api_key
+  api_key=$(get_task_api_key)
+  
+  if [ -z "$api_key" ]; then
+    log_debug "Failed to get API key from Keychain"
+    return 1
+  fi
+  
   # API呼び出し
   response=$(curl -sS \
-    -H "Authorization: ApiKey $API_KEY" \
+    -H "Authorization: ApiKey $api_key" \
     "$API_URL" 2>/dev/null)
   exit_code=$?
   

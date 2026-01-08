@@ -34,7 +34,7 @@ fi
 # パフォーマンス計測（ms単位、bc非依存）
 if [ -n "$PERF_LOG" ]; then
   PERF_LOG="${PERF_LOG:-/tmp/sketchybar_perf.log}"
-  now_ms() { date +%s%3N; }
+  now_ms() { perl -MTime::HiRes -e 'printf "%.0f", Time::HiRes::time()*1000'; }
   perf_start() { now_ms; }
   perf_end() {
     local op="$1" start="$2" end dur

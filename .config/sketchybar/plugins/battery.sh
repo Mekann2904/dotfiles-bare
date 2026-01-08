@@ -25,9 +25,9 @@ get_battery_info() {
   fi
   
   log_debug "Raw battery info: $battery_info"
-  
-  # パーセンテージを抽出（より堅牢な方法）- セミコロンなどの余分な文字を除去
-  PERCENTAGE="$(echo "$battery_info" | awk '/InternalBattery/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+%/) {print $i; exit}}' | tr -d '%' | tr -d ';' | sed 's/[^0-9]//g')"
+
+  # パーセンテージを抽出（より堅牢な方法）
+  PERCENTAGE="$(echo "$battery_info" | awk '/InternalBattery/ {for(i=1;i<=NF;i++) if($i ~ /^[0-9]+%/) {gsub(/[^0-9]/,"",$i); print $i; exit}}')"
   
   # 充電状態を確認
   if echo "$battery_info" | grep -q 'AC Power'; then

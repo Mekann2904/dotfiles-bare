@@ -114,43 +114,21 @@ collect_windows() {
       args+=(--workspace "$w")
      done
    fi
-   [ "${#args[@]}" -gt 0 ] || args=(--all)
-
-   # キャッシュファイル（即時更新のため無効化）
-   # local cache_file="/tmp/sketchybar_aerospace_cache_$$"
-   # local cache_timestamp_file="${cache_file}_ts"
-   # local current_time=$(date +%s)
-   # local cache_age=0
-
-   # # キャッシュが存在し、1秒以内なら使用
-   # if [ -f "$cache_file" ] && [ -f "$cache_timestamp_file" ]; then
-   #   local cache_time=$(cat "$cache_timestamp_file" 2>/dev/null || echo 0)
-   #   cache_age=$((current_time - cache_time))
-   #   if [ "$cache_age" -le 1 ]; then
-   #     log_debug "Using cached aerospace data (age: ${cache_age}s)"
-   #     cat "$cache_file"
-   #     return 0
-   #   fi
-   # fi
+    [ "${#args[@]}" -gt 0 ] || args=(--all)
 
    # aerospaceコマンドの存在確認とエラーハンドリング
-   if ! command -v aerospace >/dev/null 2>&1; then
-     log_debug "aerospace command not found"
-     return 1
-   fi
+    if ! command -v aerospace >/dev/null 2>&1; then
+      log_debug "aerospace command not found"
+      return 1
+    fi
 
-   local output
-   if ! output=$(aerospace list-windows "${args[@]}" --format '%{workspace}|%{app-name}' 2>/dev/null); then
-     log_debug "aerospace command failed with args: ${args[*]}"
-     return 1
-   fi
+    local output
+    if ! output=$(aerospace list-windows "${args[@]}" --format '%{workspace}|%{app-name}' 2>/dev/null); then
+      log_debug "aerospace command failed with args: ${args[*]}"
+      return 1
+    fi
 
-   # キャッシュに保存
-   echo "$output" > "$cache_file"
-   echo "$current_time" > "$cache_timestamp_file"
-   log_debug "Cached new aerospace data"
-
-   echo "$output"
+    echo "$output"
 }
 
 apps_for_ws() {

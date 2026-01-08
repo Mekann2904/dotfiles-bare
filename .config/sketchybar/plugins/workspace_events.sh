@@ -232,35 +232,6 @@ if [ "$force_event" -eq 1 ]; then
   ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
 fi
 
-# --- ターゲット解決 ---
-targets=()
-if [ -n "${INFO:-}" ]; then
-  mapfile -t targets < <(parse_info_targets)
-fi
-
-if [ ${#targets[@]} -eq 0 ]; then
-  case "${SENDER:-}" in
-    application_launched|application_terminated|window_created|window_destroyed)
-      mapfile -t targets < <(snapshot_workspaces | while read -r ws; do is_supported_ws "$ws" && printf '%s\n' "$ws"; done)
-      ;;
-    *)
-      focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
-      if [ -n "$focused" ] && is_supported_ws "$focused"; then
-        targets=("$focused")
-      fi
-      ;;
-  esac
-fi
-
-# --- 実行 ---
-if [ ${#targets[@]} -eq 0 ]; then
-  log "Running update for all workspaces (poll)"
-  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT"
-else
-  log "Running update for: ${targets[*]}"
-  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}"
-fi
-
 log "Done"
 [ -n "$DEBUG_LOG" ] && exec 3>&-
 exit 0
