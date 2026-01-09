@@ -112,7 +112,7 @@ while IFS='|' read -r win_id app_name; do
     click_script="$SCRIPT_SELF restore $win_id"
   )
   slot=$((slot + 1))
-done < <(echo "$hidden_list")
+  done <<<"$hidden_list"
 
 # 余りスロットは非表示に。
 while [ "$slot" -le "$SLOTS" ]; do
