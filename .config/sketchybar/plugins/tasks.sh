@@ -91,9 +91,15 @@ get_cached_tasks() {
   if [ -f "$CACHE_FILE" ]; then
     cache_time=$(head -n1 "$CACHE_FILE")
     cached_data=$(tail -n+2 "$CACHE_FILE")
-    
+
+    if [ -z "$cache_time" ]; then
+      log_debug "Cache file missing timestamp"
+    elif [ -z "$cached_data" ]; then
+      log_debug "Cache file missing payload"
+    fi
+
     # キャッシュが有効期限内かチェック
-    if [ $((current_time - cache_time)) -lt $CACHE_DURATION ] && [ -n "$cached_data" ]; then
+    if [ -n "$cache_time" ] && [ $((current_time - cache_time)) -lt $CACHE_DURATION ] && [ -n "$cached_data" ]; then
       log_debug "Using cached tasks data"
       echo "$cached_data"
       return 0
@@ -103,11 +109,15 @@ get_cached_tasks() {
   # 新しいデータを取得
   local new_data
   new_data=$(fetch_tasks)
-  
+
   if [ $? -eq 0 ] && [ -n "$new_data" ]; then
     # キャッシュを更新
-    echo "$current_time" > "$CACHE_FILE"
-    echo "$new_data" >> "$CACHE_FILE"
+    local tmp_cache="${CACHE_FILE}.$$"
+    {
+      echo "$current_time"
+      echo "$new_data"
+    } > "$tmp_cache"
+    mv "$tmp_cache" "$CACHE_FILE"
     log_debug "Cache updated with new data"
     echo "$new_data"
     return 0

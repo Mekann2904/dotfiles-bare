@@ -229,7 +229,11 @@ fi
 
 # --- アプリ起動/終了は少し遅らせてもう一度（遅延反映バグ対策） ---
 if [ "$force_event" -eq 1 ]; then
-  ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
+  if [ ${#targets[@]} -gt 0 ]; then
+    ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
+  else
+    ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" ) &
+  fi
 fi
 
 log "Done"

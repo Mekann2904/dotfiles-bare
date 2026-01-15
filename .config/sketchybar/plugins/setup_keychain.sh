@@ -60,7 +60,7 @@ echo ""
 
 TASKS_API_KEY=""
 while [ -z "$TASKS_API_KEY" ]; do
-  read -s -p "Tasks APIキーを入力してください（以前の値: r3iMVBxVM-czqeapGrvYF9DdYHDoiD7XTiwteJQ36Oc）: " TASKS_API_KEY
+  read -s -p "Tasks APIキーを入力してください: " TASKS_API_KEY
   echo ""
 
   if [ -z "$TASKS_API_KEY" ]; then

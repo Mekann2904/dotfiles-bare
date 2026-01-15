@@ -30,7 +30,13 @@ if [ ! -f "$WALLPAPER_PATH" ]; then
   exit 1
 fi
 
-osascript -e "tell application \"System Events\" to set picture of every desktop to (POSIX file \"$WALLPAPER_PATH\")" >/dev/null 2>&1
+escape_for_applescript() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+escaped_path=$(escape_for_applescript "$WALLPAPER_PATH")
+
+osascript -e "tell application \"System Events\" to set picture of every desktop to (POSIX file \"$escaped_path\")" >/dev/null 2>&1
 status=$?
 
 if [ $status -ne 0 ]; then

@@ -59,7 +59,9 @@ get_network_speeds() {
     fi
     
     # Save current stats to cache
-    echo "$current_time $current_bytes_in $current_bytes_out" > "$NETWORK_CACHE_FILE"
+    local tmp_cache="${NETWORK_CACHE_FILE}.$$"
+    echo "$current_time $current_bytes_in $current_bytes_out" > "$tmp_cache"
+    mv "$tmp_cache" "$NETWORK_CACHE_FILE"
     
     echo "$download_speed $upload_speed"
 }

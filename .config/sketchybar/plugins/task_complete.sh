@@ -17,13 +17,39 @@ fi
 
 TASK_ID="$1"
 API_URL="https://my-app.yinyoo2904.workers.dev/api/v1/tasks/${TASK_ID}/execute"
-API_KEY="r3iMVBxVM-czqeapGrvYF9DdYHDoiD7XTiwteJQ36Oc"
+
+get_task_api_key() {
+  local service="sketchybar-tasks"
+  local account="api-key"
+  local api_key
+
+  if command -v security >/dev/null 2>&1; then
+    api_key=$(security find-generic-password -s "$service" -a "$account" -w 2>/dev/null)
+    if [ -n "$api_key" ]; then
+      echo "$api_key"
+      return 0
+    else
+      log_debug "API key not found in Keychain (service: $service, account: $account)"
+      return 1
+    fi
+  else
+    log_debug "security command not available"
+    return 1
+  fi
+}
 
 log_debug "Completing task: $TASK_ID"
 
+api_key=$(get_task_api_key)
+if [ -z "$api_key" ]; then
+  log_debug "Failed to get API key from Keychain"
+  sketchybar --set tasks popup.drawing=off
+  exit 1
+fi
+
 # タスク完了APIを呼び出す
 response=$(curl -sS -X POST \
-  -H "Authorization: ApiKey $API_KEY" \
+  -H "Authorization: ApiKey $api_key" \
   -H "Content-Type: application/json" \
   "$API_URL" 2>/dev/null)
 

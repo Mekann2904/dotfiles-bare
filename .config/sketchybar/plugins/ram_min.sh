@@ -39,7 +39,11 @@ speculative=$(get_pages "Pages speculative")
 
 log_debug "Free pages: $free, Inactive: $inactive, Speculative: $speculative"
 
-total_pages=$(( total_bytes > 0 ? total_bytes / pagesize : 1 ))
+if [ "$total_bytes" -gt 0 ]; then
+  total_pages=$(( total_bytes / pagesize ))
+else
+  total_pages=1
+fi
 available=$(( free + inactive + speculative ))
 used=$(( total_pages - available ))
 pct=$(( used * 100 / total_pages ))

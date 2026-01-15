@@ -60,15 +60,25 @@ extract_temperature() {
   fi
 }
 
+escape_for_applescript() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+escape_for_shell() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g'
+}
+
 confirm_and_eject() {
   local disk_id="$1"
   local disk_name="$2"
+  local escaped_name
+  escaped_name=$(escape_for_applescript "$disk_name")
 
   log_debug "Eject requested: $disk_id ($disk_name)"
 
   local result
   result=$(osascript <<EOF
-set dialogText to "${disk_name} を取り外しますか？"
+set dialogText to "${escaped_name} を取り外しますか？"
 display dialog dialogText buttons {"キャンセル", "取り外す"} default button "取り外す" with icon caution
 return button returned of the result
 EOF
@@ -170,10 +180,12 @@ build_entries() {
     local label
     label="$ename $etemp"
 
+    local escaped_name
+    escaped_name=$(escape_for_shell "$ename")
     sketchybar --set "${NAME_BASE}.entry${idx}" \
       icon="󱘟" \
       label="$label" \
-      click_script="sketchybar --set $NAME_BASE popup.drawing=off; $PLUGIN_DIR/external_storage.sh eject $edisk \"$ename\"" \
+      click_script="sketchybar --set $NAME_BASE popup.drawing=off; $PLUGIN_DIR/external_storage.sh eject $edisk \"$escaped_name\"" \
       drawing=on
     idx=$((idx + 1))
   done
