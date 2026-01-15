@@ -18,6 +18,18 @@ ICON_SCALE=${HIDDEN_ICON_SCALE:-0.8}
 ICON_BG_HEIGHT=${HIDDEN_ICON_BG_HEIGHT:-16}
 ITEM_WIDTH=${HIDDEN_ITEM_WIDTH:-24}
 
+escape_for_shell() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g'
+}
+
+if ! command -v aerospace >/dev/null 2>&1; then
+  sketchybar --set hidden drawing=off icon.drawing=off label="" label.drawing=off
+  for slot in $(seq 1 "$SLOTS"); do
+    sketchybar --set "hidden.icon${slot}" drawing=off icon.background.drawing=off icon.drawing=off click_script=""
+  done
+  exit 0
+fi
+
 # フォーカス中ワークスペース名を取得。空なら空文字を返すだけ。
 focused_workspace() {
   aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | head -n1 | tr -d '[:space:]'
@@ -92,7 +104,7 @@ while IFS='|' read -r win_id app_name; do
   [ -n "$win_id" ] || continue
   [ -n "$app_name" ] || app_name="Unknown"
 
-  escaped_app=$(printf '%s' "$app_name" | sed -e 's/[\\"]/\\&/g')
+  escaped_app=$(escape_for_shell "$app_name")
 
   [ "$slot" -le "$SLOTS" ] || break
   item="hidden.icon${slot}"

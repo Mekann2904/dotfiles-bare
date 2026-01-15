@@ -3,6 +3,8 @@
 # タスクを完了としてマークするスクリプト
 # ポップアップ内のタスクをクリックしたときに呼び出される
 
+CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
+
 # デバッグログ設定
 DEBUG_LOG_FILE="/tmp/sketchybar_tasks_debug.log"
 log_debug() {
@@ -66,7 +68,7 @@ if [ $exit_code -eq 0 ] && [ -n "$response" ]; then
   fi
   
   # タスクリストを即時更新
-  NAME=tasks "$CONFIG_DIR/plugins/tasks.sh"
+  env NAME=tasks "$CONFIG_DIR/plugins/tasks.sh" || true
   
   # ポップアップを閉じる
   sketchybar --set tasks popup.drawing=off

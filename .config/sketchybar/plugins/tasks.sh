@@ -247,9 +247,15 @@ main() {
   local processed_data
   local incomplete_count
   local task_list
-  
+
+  if ! command -v jq >/dev/null 2>&1; then
+    log_debug "jq not installed"
+    sketchybar --set "$NAME" drawing=on label="jq未インストール" icon="!"
+    exit 0
+  fi
+
   log_debug "Starting tasks update"
-  
+
   # タスクデータを取得
   tasks_data=$(get_cached_tasks)
   

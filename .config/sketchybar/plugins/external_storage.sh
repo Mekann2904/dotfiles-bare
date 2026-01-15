@@ -65,7 +65,7 @@ escape_for_applescript() {
 }
 
 escape_for_shell() {
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g'
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g'
 }
 
 confirm_and_eject() {
@@ -87,11 +87,11 @@ EOF
   [ "$result" != "取り外す" ] && return
 
   if "$DISKUTIL_BIN" eject "$disk_id" >/dev/null 2>&1; then
-    osascript -e "display notification \"${disk_name} を取り外しました\" with title \"Disk Ejected\""
+    osascript -e "display notification \"${escaped_name} を取り外しました\" with title \"Disk Ejected\""
     sketchybar --set "$NAME_BASE" popup.drawing=off
     sketchybar --trigger volume_change
   else
-    osascript -e "display dialog \"${disk_name} を取り外せませんでした。使用中のアプリを確認してください。\" buttons {\"OK\"} default button \"OK\" with icon stop"
+    osascript -e "display dialog \"${escaped_name} を取り外せませんでした。使用中のアプリを確認してください。\" buttons {\"OK\"} default button \"OK\" with icon stop"
   fi
 }
 

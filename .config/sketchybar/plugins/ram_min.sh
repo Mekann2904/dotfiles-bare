@@ -51,8 +51,9 @@ pct=$(( used * 100 / total_pages ))
 log_debug "Total pages: $total_pages, Available: $available, Used: $used, Percentage: $pct%"
 
 to_gb() { /usr/bin/awk -v b="$1" 'BEGIN{printf "%.1f", b/1024/1024/1024}'; }
-used_gb="$(to_gb $((used*pagesize)))"
-total_gb="$(to_gb $total_bytes)"
+used_bytes=$((used * pagesize))
+used_gb="$(to_gb "$used_bytes")"
+total_gb="$(to_gb "$total_bytes")"
 
 log_debug "Used GB: $used_gb, Total GB: $total_gb"
 

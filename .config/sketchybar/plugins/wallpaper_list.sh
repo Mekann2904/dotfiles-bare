@@ -24,6 +24,10 @@ else
   log_debug() { :; }
 fi
 
+escape_for_shell() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\$/\\$/g' -e 's/`/\\`/g'
+}
+
 mkdir -p "$WALLPAPER_DIR" "$PREVIEW_DIR"
 mkdir -p "$(dirname "$CACHE_FILE")"
 
@@ -41,6 +45,9 @@ cleanup_items() {
 add_item() {
   local idx="$1" path="$2" label="$3" preview="$4"
   local base="wallpaper.$idx"
+  local escaped_path
+  escaped_path=$(escape_for_shell "$path")
+
   sketchybar --add item "$base.preview" popup."$WALLPAPER_PARENT_ITEM" \
     --set "$base.preview" \
       icon.drawing=off \
@@ -55,7 +62,7 @@ add_item() {
       background.padding_right=6 \
       background.padding_top=6 \
       background.padding_bottom=4 \
-      click_script="$PLUGIN_DIR/wallpaper.sh \"$path\" $WALLPAPER_PARENT_ITEM" \
+      click_script="$PLUGIN_DIR/wallpaper.sh \"$escaped_path\" $WALLPAPER_PARENT_ITEM" \
       drawing=on
   echo "$base.preview" >> "$CACHE_FILE"
 
@@ -72,7 +79,7 @@ add_item() {
       label.width=240 \
       label.align=center \
       background.drawing=off \
-      click_script="$PLUGIN_DIR/wallpaper.sh \"$path\" $WALLPAPER_PARENT_ITEM" \
+      click_script="$PLUGIN_DIR/wallpaper.sh \"$escaped_path\" $WALLPAPER_PARENT_ITEM" \
       drawing=on
   echo "$base" >> "$CACHE_FILE"
 }

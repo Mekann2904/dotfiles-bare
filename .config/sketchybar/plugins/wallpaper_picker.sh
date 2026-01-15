@@ -18,6 +18,12 @@ if [ ! -x "$SWIFTDIALOG_BIN" ]; then
   exit 1
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+  osascript -e "display notification \"python3 をインストールしてください\" with title \"SketchyBar\"" >/dev/null 2>&1 || true
+  echo "python3 が見つかりません" >&2
+  exit 1
+fi
+
 # 壁紙がなければフォルダを案内して終了
 shopt -s nullglob
 wallpapers=("$WALLPAPER_DIR"/*.{png,jpg,jpeg,webp,heic,heif})
