@@ -37,6 +37,7 @@ local WORKSPACE_D        = "D"
 local NORMAL_WS_PATTERN  = "^[1-7]$"
 local TASK_TIMEOUT    = 1.5
 local DOUBLE_ALT_GAP  = 0.35
+local CACHE_TTL       = 0.15
 
 -- AeroSpace に Alt+N/B を渡す場合は false にする
 local ENABLE_HAMMERSPOON_ALT_NB = false
@@ -62,6 +63,7 @@ local ALT_BLOCK_SCROLL   = true
 local ALT_RELEASE_GRACE  = 0.12
 
 -- ========= ユーティリティ =========
+local function nowSec() return hs.timer.absoluteTime() / 1e9 end
 local function fileExists(p) return hs.fs.attributes(p) ~= nil end
 local function findKitty()
   for _, p in ipairs(KITTY_CANDIDATES) do
@@ -70,14 +72,32 @@ local function findKitty()
   return nil
 end
 
+local cache = {
+  focusedMonitor = {value = nil, ts = 0},
+  focusedWorkspace = {value = nil, ts = 0},
+  workspacesOnMonitor = {monitor = nil, value = nil, ts = 0},
+}
+
+local function cacheFresh(entry)
+  return entry.value ~= nil and (nowSec() - entry.ts) <= CACHE_TTL
+end
+
 -- ========= 実行中ガード =========
-local busy, currentTask, watchdogTimer = false, nil, nil
+local busy, currentTask, watchdogTimer, pendingTask = false, nil, nil, nil
+local runAerospace, getNextWorkspace, getNextNormalWorkspace, updateWorkspaceCaches
 local function resetTaskState()
   busy = false
   currentTask = nil
   if watchdogTimer then
     watchdogTimer:stop()
     watchdogTimer = nil
+  end
+  local nextTask = pendingTask
+  pendingTask = nil
+  if nextTask then
+    hs.timer.doAfter(0, function()
+      runAerospace(nextTask.dir, nextTask.op)
+    end)
   end
 end
 
@@ -125,15 +145,19 @@ local function triggerAerospace(dir, op)
 end
 
 -- ========= AeroSpace 実行ヘルパー =========
-local function runAerospace(dir, op)
+runAerospace = function(dir, op)
   if not fileExists(AEROSPACE) then
     hs.alert.show("aerospace が見つからない: "..AEROSPACE)
     return
   end
-  if busy then return end
+  if busy then
+    pendingTask = {dir = dir, op = op}
+    return
+  end
   busy = true
+  pendingTask = nil
 
-  local execPath, execArgs, label
+  local execPath, execArgs, label, target
   if op == OP_MOVE_NODE then
     -- フォーカス維持でウィンドウを移動
     execPath = AEROSPACE
@@ -149,23 +173,26 @@ local function runAerospace(dir, op)
     execPath = AEROSPACE
     execArgs = {"workspace", dir}
     label = "workspace-id"
+    target = dir
   elseif op == OP_WORKSPACE_NORMAL then
     -- 通常ワークスペース(1-7)のみ巡回
-    local cmd = string.format(
-      "%q list-workspaces --monitor focused --format '%%{workspace}' | grep -E '%s' | %q workspace --stdin --wrap-around %s",
-      AEROSPACE,
-      NORMAL_WS_PATTERN,
-      AEROSPACE,
-      dir
-    )
-    execPath = "/bin/bash"
-    execArgs = {"-lc", cmd}
+    target = getNextNormalWorkspace(dir)
+    if not target then
+      resetTaskState()
+      return
+    end
+    execPath = AEROSPACE
+    execArgs = {"workspace", target}
     label = "workspace-normal"
   else
-    -- モニター内の妥当なワークスペースに絞ってから wrap-around で移動
-    local cmd = string.format("%q list-workspaces --monitor focused | %q workspace --wrap-around %s", AEROSPACE, AEROSPACE, dir)
-    execPath = "/bin/bash"
-    execArgs = {"-lc", cmd}
+    -- モニター内のワークスペースから次へ/前へ移動
+    target = getNextWorkspace(dir)
+    if not target then
+      resetTaskState()
+      return
+    end
+    execPath = AEROSPACE
+    execArgs = {"workspace", target}
     label = "workspace"
     op = OP_WORKSPACE
   end
@@ -175,6 +202,10 @@ local function runAerospace(dir, op)
     resetTaskState()
     hs.alert.show("aerospace 実行に失敗: "..label.." "..dir)
     return
+  end
+
+  if target then
+    updateWorkspaceCaches(target)
   end
 
   if watchdogTimer then watchdogTimer:stop() end
@@ -196,20 +227,28 @@ end
 
 local function getFocusedMonitor()
   if not fileExists(AEROSPACE) then return MONITOR_FALLBACK end
+  local cached = cache.focusedMonitor
+  if cacheFresh(cached) then return cached.value end
   local cmd = string.format("%q list-monitors --focused --format '%%{monitor}'", AEROSPACE)
   local out = hs.execute(cmd) or ""
   out = trim(out)
-  if out == "" then return MONITOR_FALLBACK end
-  return out
+  local value = (out == "") and MONITOR_FALLBACK or out
+  cached.value = value
+  cached.ts = nowSec()
+  return value
 end
 
 local function getFocusedWorkspace()
   if not fileExists(AEROSPACE) then return nil end
+  local cached = cache.focusedWorkspace
+  if cacheFresh(cached) then return cached.value end
   local cmd = string.format("%q list-workspaces --focused --format '%%{workspace}'", AEROSPACE)
   local out = hs.execute(cmd)
   if not out then return nil end
   out = trim(out)
   if out == "" then return nil end
+  cached.value = out
+  cached.ts = nowSec()
   return out
 end
 
@@ -217,22 +256,48 @@ local function isNormalWorkspace(ws)
   return ws and ws:match(NORMAL_WS_PATTERN) ~= nil
 end
 
-local function rememberNormalWorkspace(ws)
+local function rememberNormalWorkspace(ws, monitor)
   if not isNormalWorkspace(ws) then return end
-  local monitor = getFocusedMonitor()
+  monitor = monitor or getFocusedMonitor()
   lastNormalWorkspaceByMonitor[monitor] = ws
 end
 
-local function getNormalWorkspaceFallback()
+local function getWorkspacesOnFocusedMonitor()
   if not fileExists(AEROSPACE) then return nil end
+  local monitor = getFocusedMonitor()
+  local cached = cache.workspacesOnMonitor
+  if cached.monitor == monitor and cacheFresh(cached) then
+    return cached.value
+  end
+
   local cmd = string.format("%q list-workspaces --monitor focused --format '%%{workspace}'", AEROSPACE)
   local out = hs.execute(cmd) or ""
+  local list = {}
   for ws in out:gmatch("[^\r\n]+") do
-    if ws:match(NORMAL_WS_PATTERN) then
-      return ws
+    list[#list + 1] = ws
+  end
+  cached.monitor = monitor
+  cached.value = list
+  cached.ts = nowSec()
+  return list
+end
+
+local function getNormalWorkspaceList()
+  local list = getWorkspacesOnFocusedMonitor()
+  if not list then return nil end
+  local normal = {}
+  for _, ws in ipairs(list) do
+    if isNormalWorkspace(ws) then
+      normal[#normal + 1] = ws
     end
   end
-  return nil
+  return normal
+end
+
+local function getNormalWorkspaceFallback()
+  local normal = getNormalWorkspaceList()
+  if not normal or #normal == 0 then return nil end
+  return normal[1]
 end
 
 local function getNormalWorkspaceForReturn()
@@ -240,6 +305,70 @@ local function getNormalWorkspaceForReturn()
   local candidate = lastNormalWorkspaceByMonitor[monitor]
   if isNormalWorkspace(candidate) then return candidate end
   return getNormalWorkspaceFallback()
+end
+
+getNextWorkspace = function(dir)
+  local list = getWorkspacesOnFocusedMonitor()
+  if not list or #list == 0 then return nil end
+
+  local focused = getFocusedWorkspace()
+  local idx = nil
+  if focused then
+    for i, ws in ipairs(list) do
+      if ws == focused then
+        idx = i
+        break
+      end
+    end
+  end
+  if not idx then idx = 1 end
+
+  local nextIdx = (dir == DIR_UP) and (idx - 1) or (idx + 1)
+  if nextIdx < 1 then nextIdx = #list end
+  if nextIdx > #list then nextIdx = 1 end
+  return list[nextIdx]
+end
+
+getNextNormalWorkspace = function(dir)
+  local normal = getNormalWorkspaceList()
+  if not normal or #normal == 0 then return nil end
+
+  local monitor = getFocusedMonitor()
+  local focused = getFocusedWorkspace()
+  local base = nil
+  if isNormalWorkspace(focused) then
+    base = focused
+  else
+    local remembered = lastNormalWorkspaceByMonitor[monitor]
+    if isNormalWorkspace(remembered) then
+      base = remembered
+    end
+  end
+  if not base then base = normal[1] end
+
+  local idx = nil
+  for i, ws in ipairs(normal) do
+    if ws == base then
+      idx = i
+      break
+    end
+  end
+  if not idx then idx = 1 end
+
+  local nextIdx = (dir == DIR_UP) and (idx - 1) or (idx + 1)
+  if nextIdx < 1 then nextIdx = #normal end
+  if nextIdx > #normal then nextIdx = 1 end
+  return normal[nextIdx]
+end
+
+updateWorkspaceCaches = function(target)
+  if not target then return end
+  cache.focusedWorkspace.value = target
+  cache.focusedWorkspace.ts = nowSec()
+  if isNormalWorkspace(target) then
+    local monitor = getFocusedMonitor()
+    lastNormalWorkspaceByMonitor[monitor] = target
+  end
 end
 
 local function getTriWorkspaceTarget(focused, dir)
@@ -293,7 +422,6 @@ end
 
 -- ========= Alt/Shift 抑止ロジック =========
 local guardUntil = 0
-local function nowSec() return hs.timer.absoluteTime() / 1e9 end
 
 -- ========= Option 二連打で kitty =========
 -- Alt(Option) 連打カウンタ
