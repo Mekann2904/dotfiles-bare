@@ -13,6 +13,13 @@ POLL_INTERVAL_DEFAULT=0.7           # update_freq からのフォールバック
 STATE_FILE="${POLL_STATE_FILE:-/tmp/sketchybar_ws_state.tsv}"
 SECOND_PASS_DELAY="${SECOND_PASS_DELAY:-0.35}" # アプリ起動直後の追いかけ再走査
 
+# --- イベント合流（高速連続切替対策） ---
+EVENT_LOCK_DIR="${WS_EVENT_LOCK_DIR:-/tmp/sketchybar_ws_event.lock}"
+EVENT_PENDING_FILE="${WS_EVENT_PENDING_FILE:-/tmp/sketchybar_ws_event.pending}"
+EVENT_LOCK_STALE_SECS="${WS_EVENT_LOCK_STALE_SECS:-3}"
+EVENT_DEBOUNCE_DELAY="${WS_EVENT_DEBOUNCE_DELAY:-0.03}"
+EVENT_MAX_RERUNS="${WS_EVENT_MAX_RERUNS:-3}"
+
 # --- ログ設定 ---
 if [ -n "${DEBUG_LOG:-}" ]; then
   DEBUG_LOG="${DEBUG_LOG:-/tmp/sketchybar_simple.log}"
@@ -29,6 +36,38 @@ else
   log() { :; }
 fi
 
+lock_age_seconds() {
+  local now mtime
+  now=$(date +%s)
+  mtime=$(stat -f %m "$EVENT_LOCK_DIR" 2>/dev/null || stat -c %Y "$EVENT_LOCK_DIR" 2>/dev/null || echo 0)
+  [ "$mtime" -gt 0 ] || return 1
+  echo $((now - mtime))
+}
+
+cleanup_event_lock() {
+  [ -d "$EVENT_LOCK_DIR" ] && rmdir "$EVENT_LOCK_DIR" >/dev/null 2>&1
+}
+
+acquire_event_lock() {
+  if mkdir "$EVENT_LOCK_DIR" 2>/dev/null; then
+    return 0
+  fi
+
+  if [ -d "$EVENT_LOCK_DIR" ]; then
+    local age
+    age=$(lock_age_seconds || echo 0)
+    if [ "$age" -gt "$EVENT_LOCK_STALE_SECS" ]; then
+      rmdir "$EVENT_LOCK_DIR" >/dev/null 2>&1 || true
+      if mkdir "$EVENT_LOCK_DIR" 2>/dev/null; then
+        return 0
+      fi
+    fi
+  fi
+
+  printf '1' > "$EVENT_PENDING_FILE" 2>/dev/null || true
+  return 1
+}
+
 log "Event: SENDER=${SENDER:-} INFO=${INFO:-}"
 
 # --- 実行スロットル: イベントは優先、ポーリングのみ間引く ---
@@ -37,7 +76,7 @@ POLL_LOCK="${POLL_LOCK:-/tmp/sketchybar_ws_poll.lock}"
 
 force_event=0
 case "${SENDER:-}" in
-  application_launched|application_terminated|window_created|window_destroyed|front_app_switched)
+  application_launched|application_terminated|window_created|window_destroyed|front_app_switched|aerospace_workspace_change|window_focused)
     force_event=1 ;;
 esac
 
@@ -79,13 +118,6 @@ fi
 capture_snapshot() {
   aerospace list-windows --all --format '%{workspace}%{tab}%{app-name}' 2>/dev/null || true
 }
-
-WINDOW_SNAPSHOT="$(capture_snapshot)"
-if [ -z "$WINDOW_SNAPSHOT" ]; then
-  sleep 0.15
-  WINDOW_SNAPSHOT="$(capture_snapshot)"
-fi
-export WINDOW_SNAPSHOT
 
 MIN_WORKSPACE_NUM=${MIN_WORKSPACE:-1}
 MAX_WORKSPACE_NUM=${WORKSPACE_RANGE_MAX:-${MAX_WORKSPACE:-7}}
@@ -171,70 +203,103 @@ build_state_lines() {
   ' <(workspace_list) <(printf '%s\n' "$WINDOW_SNAPSHOT")
 }
 
-OLD_STATE="$(cat "$STATE_FILE" 2>/dev/null || true)"
-NEW_STATE="$(build_state_lines)"
+run_once() {
+  WINDOW_SNAPSHOT="$(capture_snapshot)"
+  if [ -z "$WINDOW_SNAPSHOT" ]; then
+    sleep 0.15
+    WINDOW_SNAPSHOT="$(capture_snapshot)"
+  fi
+  export WINDOW_SNAPSHOT
 
-collect_changed_ws() {
-  local changed_ws=()
-  while IFS=$'\t' read -r ws apps; do
-    [ -n "$ws" ] || continue
-    old_line=$(printf '%s\n' "$OLD_STATE" | awk -F'\t' -v w="$ws" '$1==w{print $0; exit}')
-    new_line="$ws\t$apps"
-    if [ "$old_line" != "$new_line" ]; then
-      changed_ws+=("$ws")
+  OLD_STATE="$(cat "$STATE_FILE" 2>/dev/null || true)"
+  NEW_STATE="$(build_state_lines)"
+
+  collect_changed_ws() {
+    local changed_ws=()
+    while IFS=$'\t' read -r ws apps; do
+      [ -n "$ws" ] || continue
+      old_line=$(printf '%s\n' "$OLD_STATE" | awk -F'\t' -v w="$ws" '$1==w{print $0; exit}')
+      new_line="$ws\t$apps"
+      if [ "$old_line" != "$new_line" ]; then
+        changed_ws+=("$ws")
+      fi
+    done <<<"$NEW_STATE"
+    printf '%s\n' "${changed_ws[@]}" | tr ' ' '\n' | sed '/^$/d'
+  }
+
+  mapfile -t diff_targets < <(collect_changed_ws)
+  printf '%s\n' "$NEW_STATE" > "$STATE_FILE" 2>/dev/null || true
+
+  # diff が無ければ終了（ポーリング時のみ）。イベントは強制で続行。
+  if [ ${#diff_targets[@]} -eq 0 ] && [ "$force_event" -ne 1 ]; then
+    log "No changes detected; skip update"
+    return 0
+  fi
+
+  # --- メイン実行: 差分対象のみ更新 ---
+  targets=()
+  if [ ${#diff_targets[@]} -gt 0 ]; then
+    targets=("${diff_targets[@]}")
+  elif [ -n "${INFO:-}" ]; then
+    mapfile -t targets < <(parse_info_targets)
+  fi
+
+  if [ ${#targets[@]} -eq 0 ]; then
+    case "${SENDER:-}" in
+      application_launched|application_terminated|window_created|window_destroyed)
+        mapfile -t targets < <(snapshot_workspaces | while read -r ws; do is_supported_ws "$ws" && printf '%s\n' "$ws"; done)
+        ;;
+      *)
+        focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
+        if [ -n "$focused" ] && is_supported_ws "$focused"; then
+          targets=("$focused")
+        fi
+        ;;
+    esac
+  fi
+
+  if [ ${#targets[@]} -eq 0 ]; then
+    log "Running update for all workspaces (poll)"
+    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT"
+  else
+    log "Running update for: ${targets[*]}"
+    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}"
+  fi
+
+  # --- アプリ起動/終了は少し遅らせてもう一度（遅延反映バグ対策） ---
+  if [ "$force_event" -eq 1 ]; then
+    if [ ${#targets[@]} -gt 0 ]; then
+      ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
+    else
+      ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" ) &
     fi
-  done <<<"$NEW_STATE"
-  printf '%s\n' "${changed_ws[@]}" | tr ' ' '\n' | sed '/^$/d'
+  fi
+
+  return 0
 }
 
-mapfile -t diff_targets < <(collect_changed_ws)
-printf '%s\n' "$NEW_STATE" > "$STATE_FILE" 2>/dev/null || true
-
-# diff が無ければ終了（ポーリング時のみ）。イベントは強制で続行。
-if [ ${#diff_targets[@]} -eq 0 ] && [ "$force_event" -ne 1 ]; then
-  log "No changes detected; skip update"
+if ! acquire_event_lock; then
+  log "Skip: update in progress; pending set"
   [ -n "$DEBUG_LOG" ] && exec 3>&-
   exit 0
 fi
+trap cleanup_event_lock EXIT INT TERM
 
-# --- メイン実行: 差分対象のみ更新 ---
-targets=()
-if [ ${#diff_targets[@]} -gt 0 ]; then
-  targets=("${diff_targets[@]}")
-elif [ -n "${INFO:-}" ]; then
-  mapfile -t targets < <(parse_info_targets)
-fi
-
-if [ ${#targets[@]} -eq 0 ]; then
-  case "${SENDER:-}" in
-    application_launched|application_terminated|window_created|window_destroyed)
-      mapfile -t targets < <(snapshot_workspaces | while read -r ws; do is_supported_ws "$ws" && printf '%s\n' "$ws"; done)
-      ;;
-    *)
-      focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
-      if [ -n "$focused" ] && is_supported_ws "$focused"; then
-        targets=("$focused")
-      fi
-      ;;
-  esac
-fi
-
-if [ ${#targets[@]} -eq 0 ]; then
-  log "Running update for all workspaces (poll)"
-  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT"
-else
-  log "Running update for: ${targets[*]}"
-  SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}"
-fi
-
-# --- アプリ起動/終了は少し遅らせてもう一度（遅延反映バグ対策） ---
-if [ "$force_event" -eq 1 ]; then
-  if [ ${#targets[@]} -gt 0 ]; then
-    ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
-  else
-    ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" ) &
+reruns=0
+while [ "$reruns" -lt "$EVENT_MAX_RERUNS" ]; do
+  reruns=$((reruns + 1))
+  if [ -n "$EVENT_DEBOUNCE_DELAY" ] && [ "$EVENT_DEBOUNCE_DELAY" != "0" ]; then
+    sleep "$EVENT_DEBOUNCE_DELAY"
   fi
-fi
+
+  run_once || true
+
+  if [ -f "$EVENT_PENDING_FILE" ]; then
+    rm -f "$EVENT_PENDING_FILE" 2>/dev/null || true
+    continue
+  fi
+  break
+done
 
 log "Done"
 [ -n "$DEBUG_LOG" ] && exec 3>&-
