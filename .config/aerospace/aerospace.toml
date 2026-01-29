@@ -123,14 +123,14 @@ alt-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor fo
 # アプリを移動
 alt-shift-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
-  | grep -v -- '^T$' \
-  | grep -v -- '^D$' \
+  | grep -v -i -- '^t$' \
+  | grep -v -i -- '^d$' \
   | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window next"'''
 
 alt-shift-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
   | grep -v -- '-hidden$' \
-  | grep -v -- '^T$' \
-  | grep -v -- '^D$' \
+  | grep -v -i -- '^t$' \
+  | grep -v -i -- '^d$' \
   | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window prev"'''
 
 # 疑似ミニマイズ／復帰

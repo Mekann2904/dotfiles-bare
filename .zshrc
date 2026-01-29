@@ -144,22 +144,22 @@ unset _zsh_compdir
 # === 2. 遅延読み込み設定 (Lazy Loading) - 最重要高速化ポイント ===
 
 # --- Conda Lazy Load ---
-function conda() {
-    unfunction conda
-    # パスが正しいか確認してください
-    __conda_setup="$('/Users/mekann/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-    if [ $? -eq 0 ]; then
-        eval "$__conda_setup"
-    else
-        if [ -f "/Users/mekann/miniconda3/etc/profile.d/conda.sh" ]; then
-            . "/Users/mekann/miniconda3/etc/profile.d/conda.sh"
-        else
-            export PATH="/Users/mekann/miniconda3/bin:$PATH"
-        fi
-    fi
-    unset __conda_setup
-    conda "$@"
-}
+#function conda() {
+#    unfunction conda
+#    # パスが正しいか確認してください
+#    __conda_setup="$('/Users/mekann/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
+#    if [ $? -eq 0 ]; then
+#        eval "$__conda_setup"
+#    else
+#        if [ -f "/Users/mekann/miniconda3/etc/profile.d/conda.sh" ]; then
+#            . "/Users/mekann/miniconda3/etc/profile.d/conda.sh"
+#        else
+#            export PATH="/Users/mekann/miniconda3/bin:$PATH"
+#        fi
+#    fi
+#    unset __conda_setup
+#    conda "$@"
+#}
 
 # --- NVM Lazy Load ---
 export NVM_DIR="$HOME/.config/nvm"
