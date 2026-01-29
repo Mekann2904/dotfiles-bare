@@ -90,7 +90,6 @@ workspace_max=$MAX_WORKSPACE
 
 for sid in $(seq $workspace_min $workspace_max); do
   sketchybar --add item space.$sid left \
-    --subscribe space.$sid aerospace_workspace_change \
     --set space.$sid \
       drawing=on \
       background.drawing=off \
@@ -103,8 +102,7 @@ for sid in $(seq $workspace_min $workspace_max); do
       icon.padding_right=4 \
       label="" \
       label.drawing=off \
-      click_script="aerospace workspace $sid" \
-      script="$CONFIG_DIR/plugins/aerospace.sh $sid"
+      click_script="aerospace workspace $sid"
 
   icon_items=()
   for icon_slot in $(seq 1 "$VISIBLE_ICON_SLOTS"); do
@@ -193,7 +191,6 @@ fi
 for idx in "${!special_workspaces[@]}"; do
   sid="${special_workspaces[$idx]}"
   sketchybar --add item space.$sid left \
-    --subscribe space.$sid aerospace_workspace_change \
     --set space.$sid \
       drawing=on \
       background.drawing=off \
@@ -206,8 +203,7 @@ for idx in "${!special_workspaces[@]}"; do
       icon.padding_right=4 \
       label="" \
       label.drawing=off \
-      click_script="aerospace workspace $sid" \
-      script="$CONFIG_DIR/plugins/aerospace.sh $sid"
+      click_script="aerospace workspace $sid"
 
   icon_items=()
   for icon_slot in $(seq 1 "$VISIBLE_ICON_SLOTS"); do
@@ -276,6 +272,15 @@ for idx in "${!special_workspaces[@]}"; do
   fi
 done
 
+# 不可視アイテム: フォーカス表示を集約更新する。
+sketchybar --add item workspace.focus center \
+  --set workspace.focus \
+    drawing=off \
+    script="$CONFIG_DIR/plugins/aerospace_focus.sh" \
+  --subscribe workspace.focus \
+    aerospace_workspace_change \
+    window_focused
+
 # 不可視アイテム: イベント＋ポーリングでアイコンを更新する。
 sketchybar --add item workspace.refresh center \
   --set workspace.refresh \
@@ -293,6 +298,9 @@ sketchybar --add item workspace.refresh center \
 
 # Populate workspace tiles with the latest icons once on startup.
 "$PLUGIN_DIR/update_workspace_icons.sh"
+
+# Populate workspace focus styles once on startup.
+"$PLUGIN_DIR/aerospace_focus.sh"
 
 
 
