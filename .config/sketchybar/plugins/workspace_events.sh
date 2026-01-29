@@ -45,7 +45,7 @@ if [ "$force_event" -ne 1 ]; then
   NOW_TS=$(date +%s%N)
   if [ -f "$POLL_LOCK" ]; then
     LAST_TS=$(cat "$POLL_LOCK" 2>/dev/null || echo 0)
-    THRESHOLD_NS=$(printf '%.0f\n' "$(echo "$POLL_INTERVAL * 1000000000" | bc -l 2>/dev/null || awk -v v="$POLL_INTERVAL" 'BEGIN{printf "%.0f",v*1000000000}')" )
+    THRESHOLD_NS=$(awk -v v="$POLL_INTERVAL" 'BEGIN{printf "%.0f", v*1000000000}')
     DELTA=$((NOW_TS - LAST_TS))
     if [ "$DELTA" -lt "$THRESHOLD_NS" ] && [ "$DELTA" -lt "$MIN_INTERVAL_DEFAULT_NS" ]; then
       log "Skip: throttled (Δ=${DELTA}ns < ${THRESHOLD_NS}ns)"

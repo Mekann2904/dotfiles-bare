@@ -5,9 +5,13 @@
 
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 
-# デバッグログ設定
-DEBUG_LOG_FILE="/tmp/sketchybar_tasks_debug.log"
+# デバッグログ設定（必要時のみ）
+DEBUG_LOG_FILE="${DEBUG_LOG:-}"
+if [ -z "$DEBUG_LOG_FILE" ] && [ "${SKETCHYBAR_TASKS_DEBUG:-}" = "1" ]; then
+  DEBUG_LOG_FILE="/tmp/sketchybar_tasks_debug.log"
+fi
 log_debug() {
+  [ -n "$DEBUG_LOG_FILE" ] || return 0
   echo "$(date '+%Y-%m-%d %H:%M:%S') [TASK_COMPLETE] $*" >> "$DEBUG_LOG_FILE"
 }
 
@@ -51,6 +55,11 @@ fi
 
 # タスク完了APIを呼び出す
 response=$(curl -sS -X POST \
+  --connect-timeout 2 \
+  --max-time 6 \
+  --retry 2 \
+  --retry-delay 1 \
+  --retry-connrefused \
   -H "Authorization: ApiKey $api_key" \
   -H "Content-Type: application/json" \
   "$API_URL" 2>/dev/null)

@@ -6,16 +6,39 @@
 # 画像パスの初期化（必ず最初に定義）
 ICON_PATH="$(dirname "$0")/deepseek.png"
 
-# デバッグログ設定
-DEBUG_LOG="${DEBUG_LOG:-/tmp/sketchybar_deepseek_debug.log}"
-
-if [ -n "$DEBUG_LOG" ]; then
-  log_debug() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [DEEPSEEK] $*" >> "$DEBUG_LOG"
-  }
-else
-  log_debug() { :; }
+# デバッグログ設定（必要時のみ）
+DEBUG_LOG_FILE="${DEBUG_LOG:-}"
+if [ -z "$DEBUG_LOG_FILE" ] && [ "${SKETCHYBAR_DEEPSEEK_DEBUG:-}" = "1" ]; then
+  DEBUG_LOG_FILE="/tmp/sketchybar_deepseek_debug.log"
 fi
+log_debug() {
+  [ -n "$DEBUG_LOG_FILE" ] || return 0
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [DEEPSEEK] $*" >> "$DEBUG_LOG_FILE"
+}
+
+# キャッシュ設定
+CACHE_FILE="${DEEPSEEK_CACHE_FILE:-/tmp/sketchybar_deepseek_cache}"
+CACHE_TTL="${DEEPSEEK_CACHE_TTL:-21600}"
+
+write_cache() {
+  local value="$1"
+  printf '%s\t%s' "$(date +%s)" "$value" > "$CACHE_FILE" 2>/dev/null || true
+}
+
+read_cache() {
+  [ -f "$CACHE_FILE" ] || return 1
+  local ts value now age
+  IFS=$'\t' read -r ts value < "$CACHE_FILE" || return 1
+  [ -n "$value" ] || return 1
+  now=$(date +%s)
+  age=$((now - ts))
+  if [ "$age" -le "$CACHE_TTL" ]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  printf '%s' "$value"
+  return 2
+}
 
 # KeychainからAPIキーを取得する関数
 get_deepseek_api_key() {
@@ -59,7 +82,12 @@ get_deepseek_balance() {
   local response
   local exit_code
 
-  response=$(curl -sS --max-time 15 \
+  response=$(curl -sS \
+    --connect-timeout 3 \
+    --max-time 8 \
+    --retry 2 \
+    --retry-delay 1 \
+    --retry-connrefused \
     -H "Authorization: Bearer $api_key" \
     "https://api.deepseek.com/user/balance" 2>&1)
   exit_code=$?
@@ -116,11 +144,26 @@ get_deepseek_balance() {
   fi
 
   log_debug "Balance retrieved: $BALANCE"
+  write_cache "$BALANCE"
   return 0
 }
 
 # メイン処理
 if ! get_deepseek_balance "$DEEPSEEK_API_KEY"; then
+  cached_balance="$(read_cache)"
+  if [ -n "$cached_balance" ]; then
+    log_debug "Using cached balance due to API error"
+    FORMATTED_BALANCE=$(printf "%.2f" "$cached_balance" 2>/dev/null || echo "$cached_balance")
+    sketchybar --set "$NAME" \
+      icon="" \
+      icon.background.image="$ICON_PATH" \
+      icon.background.drawing=on \
+      icon.background.image.scale=0.01 \
+      label="$FORMATTED_BALANCE" \
+      drawing=on
+    exit 0
+  fi
+
   sketchybar --set "$NAME" \
     icon="" \
     icon.background.image="$ICON_PATH" \

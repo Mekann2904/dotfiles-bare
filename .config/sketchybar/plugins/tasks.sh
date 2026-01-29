@@ -4,14 +4,24 @@
 # APIエラー時は非表示にしてバーの安定性を保つために存在する。
 # 関連ファイル: sketchybarrc, plugins/clock.sh, plugins/ram_min.sh
 
-# デバッグログ設定
-DEBUG_LOG_FILE="/tmp/sketchybar_tasks_debug.log"
+# デバッグログ設定（必要時のみ）
+DEBUG_LOG_FILE="${DEBUG_LOG:-}"
+if [ -z "$DEBUG_LOG_FILE" ] && [ "${SKETCHYBAR_TASKS_DEBUG:-}" = "1" ]; then
+  DEBUG_LOG_FILE="/tmp/sketchybar_tasks_debug.log"
+fi
 log_debug() {
+  [ -n "$DEBUG_LOG_FILE" ] || return 0
   echo "$(date '+%Y-%m-%d %H:%M:%S') [TASKS] $*" >> "$DEBUG_LOG_FILE"
 }
 
 # API設定
 API_URL="https://my-app.yinyoo2904.workers.dev/api/v1/tasks/today"
+
+# curl 設定
+CURL_CONNECT_TIMEOUT="${TASKS_CONNECT_TIMEOUT:-2}"
+CURL_MAX_TIME="${TASKS_MAX_TIME:-6}"
+CURL_RETRY="${TASKS_RETRY:-2}"
+CURL_RETRY_DELAY="${TASKS_RETRY_DELAY:-1}"
 
 # キャッシュ設定
 CACHE_FILE="/tmp/sketchybar_tasks_cache"
@@ -56,8 +66,11 @@ fetch_tasks() {
   
   # API呼び出し
   response=$(curl -sS \
-    --connect-timeout 2 \
-    --max-time 5 \
+    --connect-timeout "$CURL_CONNECT_TIMEOUT" \
+    --max-time "$CURL_MAX_TIME" \
+    --retry "$CURL_RETRY" \
+    --retry-delay "$CURL_RETRY_DELAY" \
+    --retry-connrefused \
     -H "Authorization: ApiKey $api_key" \
     "$API_URL" 2>/dev/null)
   exit_code=$?
@@ -134,126 +147,117 @@ get_cached_tasks() {
   fi
 }
 
-# 現在注力すべきタスクを選ぶ（時間指定優先 → 最初のTODO）
-pick_focus_task() {
-  local tasks_data="$1"
-  local current_hour=$(date +%H)
-  local task_count=$(echo "$tasks_data" | jq -r '.data | length')
+# 時間ラベルから時刻を抽出
+task_hour_from_label() {
+  local time_label="$1"
+  case "$time_label" in
+    *朝*7*時*) echo 7 ;;
+    *朝*8*時*) echo 8 ;;
+    *朝*9*時*) echo 9 ;;
+    *昼*12*時*) echo 12 ;;
+    *昼*13*時*) echo 13 ;;
+    *昼*14*時*) echo 14 ;;
+    *夕*18*時*) echo 18 ;;
+    *夕*19*時*) echo 19 ;;
+    *夜*20*時*) echo 20 ;;
+    *夜*21*時*) echo 21 ;;
+    *夜*22*時*) echo 22 ;;
+    *) echo "" ;;
+  esac
+}
+
+# タスクデータを処理
+process_tasks() {
+  local tasks_lines="$1"
+  local incomplete_count=0
   local focus_task=""
   local first_todo=""
+  local current_hour
+  local task_hour
+  current_hour=$((10#$(date +%H)))
 
-  if [ "$task_count" -le 0 ]; then
-    echo ""
+  local i=1
+  local cmd=(sketchybar)
+
+  if [ -z "$tasks_lines" ]; then
+    while [ $i -le 10 ]; do
+      cmd+=(--set "task.$i" drawing=off)
+      i=$((i + 1))
+    done
+    "${cmd[@]}" 2>/dev/null || true
+    printf '%s\037%s' "$incomplete_count" "$focus_task"
     return
   fi
 
-  for i in $(seq 0 $((task_count - 1))); do
-    local task_title=$(echo "$tasks_data" | jq -r ".data[$i].title")
-    local task_status=$(echo "$tasks_data" | jq -r ".data[$i].status")
-    local time_label=$(echo "$tasks_data" | jq -r ".data[$i].timeLabel")
+  while IFS=$'\t' read -r task_title task_status task_id time_label target completed; do
+    [ -n "$task_title" ] || continue
 
-    # 最初のTODOを覚えておく（時間指定なしでも表示に使う）
-    if [ "$task_status" = "todo" ] && [ -z "$first_todo" ]; then
-      first_todo="$task_title"
-    fi
+    if [ "$task_status" = "todo" ]; then
+      incomplete_count=$((incomplete_count + 1))
+      if [ -z "$first_todo" ]; then
+        first_todo="$task_title"
+      fi
 
-    # 時間指定が現在の時間と一致するTODOがあれば最優先で採用
-    if [ "$task_status" = "todo" ] && [ "$time_label" != "いつでも" ] && [ "$time_label" != "null" ] && [ -n "$time_label" ]; then
-      local task_hour=""
-      case "$time_label" in
-        *朝*7*時*) task_hour=7 ;;
-        *朝*8*時*) task_hour=8 ;;
-        *朝*9*時*) task_hour=9 ;;
-        *昼*12*時*) task_hour=12 ;;
-        *昼*13*時*) task_hour=13 ;;
-        *昼*14*時*) task_hour=14 ;;
-        *夕*18*時*) task_hour=18 ;;
-        *夕*19*時*) task_hour=19 ;;
-        *夜*20*時*) task_hour=20 ;;
-        *夜*21*時*) task_hour=21 ;;
-        *夜*22*時*) task_hour=22 ;;
-        *) task_hour="" ;;
-      esac
-
-      if [ -n "$task_hour" ] && [ "$task_hour" -eq "$current_hour" ]; then
-        focus_task="$task_title"
-        break
+      if [ -z "$focus_task" ] && [ -n "$time_label" ] && [ "$time_label" != "null" ] && [ "$time_label" != "いつでも" ]; then
+        task_hour="$(task_hour_from_label "$time_label")"
+        if [ -n "$task_hour" ] && [ "$task_hour" -eq "$current_hour" ]; then
+          focus_task="$task_title"
+        fi
       fi
     fi
+
+    if [ "$i" -le 10 ]; then
+      local display_label="$task_title"
+
+      if [ -n "$time_label" ] && [ "$time_label" != "null" ] && [ "$time_label" != "いつでも" ]; then
+        display_label="$display_label ($time_label)"
+      fi
+
+      if [ "$target" != "1" ] && [ "$target" != "null" ] && [ -n "$target" ]; then
+        display_label="$display_label [$completed/$target]"
+      fi
+
+      if [ "$task_status" = "todo" ]; then
+        cmd+=(--set "task.$i"
+          icon="󰄱"
+          label="$display_label"
+          label.color=0xffffffff
+          click_script="$CONFIG_DIR/plugins/task_complete.sh $task_id"
+          drawing=on
+        )
+      else
+        cmd+=(--set "task.$i"
+          icon="󰄲"
+          label="$display_label"
+          label.color=0x99ffffff
+          click_script="sketchybar --set tasks popup.drawing=off"
+          drawing=on
+        )
+      fi
+    fi
+    i=$((i + 1))
+  done <<<"$tasks_lines"
+
+  while [ $i -le 10 ]; do
+    cmd+=(--set "task.$i" drawing=off)
+    i=$((i + 1))
   done
+
+  "${cmd[@]}" 2>/dev/null || true
 
   if [ -z "$focus_task" ]; then
     focus_task="$first_todo"
   fi
 
-  echo "$focus_task"
-}
-
-# タスクデータを処理
-process_tasks() {
-  local tasks_data="$1"
-  local incomplete_count=0
-  local task_count=0
-  
-  # タスクデータから不完全なタスクをカウント
-  incomplete_count=$(echo "$tasks_data" | jq -r '.data[] | select(.status == "todo") | .title' | wc -l | tr -d ' ')
-  task_count=$(echo "$tasks_data" | jq -r '.data | length')
-  
-  # ポップアップアイテムを更新（エラーを無視）
-  local i=1
-  while [ $i -le 10 ]; do
-    if [ $i -le $task_count ]; then
-      local task_title=$(echo "$tasks_data" | jq -r ".data[$((i-1))].title")
-      local task_status=$(echo "$tasks_data" | jq -r ".data[$((i-1))].status")
-      local task_id=$(echo "$tasks_data" | jq -r ".data[$((i-1))].taskId")
-      local time_label=$(echo "$tasks_data" | jq -r ".data[$((i-1))].timeLabel")
-      local target=$(echo "$tasks_data" | jq -r ".data[$((i-1))].target")
-      local completed=$(echo "$tasks_data" | jq -r ".data[$((i-1))].completed")
-      
-      # タスクラベルを構築
-      local display_label="$task_title"
-      
-      # 時間指定がある場合は追加（"いつでも"以外）
-      if [ "$time_label" != "いつでも" ] && [ "$time_label" != "null" ] && [ -n "$time_label" ]; then
-        display_label="$display_label ($time_label)"
-      fi
-      
-      # 複数回行うものは進捗を表示
-      if [ "$target" != "1" ] && [ "$target" != "null" ] && [ -n "$target" ]; then
-        display_label="$display_label [$completed/$target]"
-      fi
-      
-      if [ "$task_status" = "todo" ]; then
-        sketchybar --set "task.$i" \
-          icon="󰄱" \
-          label="$display_label" \
-          label.color=0xffffffff \
-          click_script="$CONFIG_DIR/plugins/task_complete.sh $task_id" \
-          drawing=on 2>/dev/null || true
-      else
-        sketchybar --set "task.$i" \
-          icon="󰄲" \
-          label="$display_label" \
-          label.color=0x99ffffff \
-          click_script="sketchybar --set tasks popup.drawing=off" \
-          drawing=on 2>/dev/null || true
-      fi
-    else
-      # 余分なタスクアイテムを非表示
-      sketchybar --set "task.$i" drawing=off 2>/dev/null || true
-    fi
-    i=$((i + 1))
-  done
-  
-  echo "$incomplete_count"
+  printf '%s\037%s' "$incomplete_count" "$focus_task"
 }
 
 # メイン処理
 main() {
   local tasks_data
-  local processed_data
+  local tasks_lines
   local incomplete_count
-  local task_list
+  local current_task
 
   if ! command -v jq >/dev/null 2>&1; then
     log_debug "jq not installed"
@@ -272,13 +276,15 @@ main() {
     exit 0
   fi
   
+  # タスクデータを一度でパース
+  tasks_lines=$(echo "$tasks_data" | jq -r '.data[] | [.title, .status, .taskId, (.timeLabel // ""), (.target // ""), (.completed // "")] | @tsv' 2>/dev/null || true)
+
   # タスクデータを処理
-  incomplete_count=$(process_tasks "$tasks_data")
+  local result
+  result=$(process_tasks "$tasks_lines")
+  IFS=$'\037' read -r incomplete_count current_task <<<"$result"
   
   log_debug "Processed tasks: incomplete=$incomplete_count"
-  
-  # 現在時刻のタスクを取得
-  current_task=$(pick_focus_task "$tasks_data")
   
   if [ "$incomplete_count" -eq 0 ]; then
     log_debug "No incomplete tasks, show zero"
