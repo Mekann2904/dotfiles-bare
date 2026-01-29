@@ -560,6 +560,7 @@ sketchybar --add item tasks right \
 sketchybar --add item recording right \
   --set recording script="$PLUGIN_DIR/recording.sh" \
                update_freq=1 \
+               drawing=off \
                icon="󰍮" \
                label="" \
                padding_left=4 \

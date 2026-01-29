@@ -11,12 +11,16 @@ START_FILE="/tmp/sketchybar_recording_start"
 STATUS_FILE="/tmp/sketchybar_recording_status"
 PAUSE_FILE="/tmp/sketchybar_recording_pause"
 PAUSED_TOTAL_FILE="/tmp/sketchybar_recording_paused_total"
+INPUT_VOLUME_FILE="/tmp/sketchybar_recording_input_volume"
 LAST_CLICK_FILE="/tmp/sketchybar_recording_last_click"
 LOG_FILE="/tmp/sketchybar_recording_ffmpeg.log"
 
 DBL_CLICK_MS=450
 DBL_CLICK_S="0.45"
-AUDIO_DEVICE="${SKETCHYBAR_AUDIO_DEVICE:-0}"
+AUDIO_DEVICE="${SKETCHYBAR_AUDIO_DEVICE:-}"
+AUDIO_DEVICE_NAME="${SKETCHYBAR_AUDIO_DEVICE_NAME:-MacBook Airのマイク}"
+RECORDING_INPUT_VOLUME="${RECORDING_INPUT_VOLUME:-65}"
+RECORDING_FORMAT="${RECORDING_FORMAT:-m4a}"
 
 ICON_IDLE="󰍮"
 ICON_PAUSED="󰍯"
@@ -35,6 +39,62 @@ PY
     return
   fi
   echo $(( $(date +%s) * 1000 ))
+}
+
+resolve_audio_device() {
+  if [ -n "$AUDIO_DEVICE" ]; then
+    echo "$AUDIO_DEVICE"
+    return
+  fi
+
+  local list
+  list="$(ffmpeg -f avfoundation -list_devices true -i "" 2>&1 || true)"
+  [ -n "$list" ] || { echo 0; return; }
+
+  if [ -n "$AUDIO_DEVICE_NAME" ]; then
+    local match
+    match=$(printf '%s\n' "$list" | awk -v name="$AUDIO_DEVICE_NAME" '
+      BEGIN { in_audio=0 }
+      /AVFoundation audio devices:/ { in_audio=1; next }
+      in_audio && /\[[0-9]+\] / {
+        line=$0
+        sub(/^.*\[([0-9]+)\] /, "", line)
+        dev=line
+        if (index(dev, name) > 0) {
+          match($0, /\[[0-9]+\]/)
+          idx=substr($0, RSTART+1, RLENGTH-2)
+          print idx
+          exit
+        }
+      }
+    ')
+    if [ -n "$match" ]; then
+      echo "$match"
+      return
+    fi
+  fi
+
+  local auto
+  auto=$(printf '%s\n' "$list" | awk '
+    BEGIN { in_audio=0; first=""; found=0 }
+    /AVFoundation audio devices:/ { in_audio=1; next }
+    in_audio && /\[[0-9]+\] / {
+      match($0, /\[[0-9]+\]/)
+      idx=substr($0, RSTART+1, RLENGTH-2)
+      dev=substr($0, RSTART+RLENGTH+1)
+      if (dev ~ /(Background Music|BlackHole|Loopback|UI Sounds|Teams Audio|Immersed)/) next
+      if (first == "") first=idx
+      if (dev ~ /(マイク|Microphone|Built-in|Internal|Mic)/) { print idx; found=1; exit }
+    }
+    END { if (!found && first != "") print first }
+  ')
+
+  if [ -n "$auto" ]; then
+    echo "$auto"
+    return
+  fi
+
+  echo 0
 }
 
 read_int() {
@@ -56,6 +116,39 @@ is_running() {
 
 cleanup_state() {
   rm -f "$PID_FILE" "$START_FILE" "$STATUS_FILE" "$PAUSE_FILE" "$PAUSED_TOTAL_FILE"
+}
+
+get_input_volume() {
+  command -v osascript >/dev/null 2>&1 || return 1
+  osascript -e 'input volume of (get volume settings)' 2>/dev/null | tr -cd '0-9'
+}
+
+set_input_volume() {
+  local vol="$1"
+  command -v osascript >/dev/null 2>&1 || return 1
+  [ -n "$vol" ] || return 1
+  osascript -e "set volume input volume $vol" >/dev/null 2>&1
+}
+
+save_and_set_input_volume() {
+  local current
+  current="$(get_input_volume)"
+  if [ -n "$current" ]; then
+    printf '%s' "$current" > "$INPUT_VOLUME_FILE"
+  fi
+  if [ -n "$RECORDING_INPUT_VOLUME" ]; then
+    set_input_volume "$RECORDING_INPUT_VOLUME" || true
+  fi
+}
+
+restore_input_volume() {
+  if [ -f "$INPUT_VOLUME_FILE" ]; then
+    prev="$(tr -cd '0-9' < "$INPUT_VOLUME_FILE")"
+    if [ -n "$prev" ]; then
+      set_input_volume "$prev" || true
+    fi
+    rm -f "$INPUT_VOLUME_FILE"
+  fi
 }
 
 set_status() {
@@ -190,18 +283,44 @@ start_recording() {
   echo 0 > "$PAUSED_TOTAL_FILE"
   rm -f "$PAUSE_FILE"
   set_status "recording"
+  save_and_set_input_volume
 
   local output
-  output="$OUTPUT_DIR/recording_$(date +%Y%m%d_%H%M%S).mp3"
+  local ext
+  local -a codec_opts
+  case "$RECORDING_FORMAT" in
+    wav)
+      ext="wav"
+      codec_opts=( -c:a pcm_s16le )
+      ;;
+    m4a|aac)
+      ext="m4a"
+      codec_opts=( -c:a aac -b:a 192k )
+      ;;
+    mp3|*)
+      ext="mp3"
+      codec_opts=( -c:a libmp3lame -q:a 2 )
+      ;;
+  esac
+  output="$OUTPUT_DIR/recording_$(date +%Y%m%d_%H%M%S).${ext}"
 
-  ffmpeg -f avfoundation -i ":$AUDIO_DEVICE" \
-    -c:a libmp3lame -q:a 2 \
-    "$output" </dev/null > "$LOG_FILE" 2>&1 &
+  local device_index
+  device_index="$(resolve_audio_device | head -n1 | tr -cd '0-9')"
+  [ -n "$device_index" ] || device_index=0
+  device_index=$((10#$device_index))
+  printf '%s\n' "[recording] using audio device index: $device_index" > "$LOG_FILE"
+
+  ffmpeg -f avfoundation \
+    -i ":$device_index" \
+    -ar 48000 -ac 1 \
+    "${codec_opts[@]}" \
+    "$output" </dev/null >> "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
 
   sleep 0.2
   if ! is_running; then
     cleanup_state
+    restore_input_volume
     sketchybar --set "$ITEM_NAME" \
       icon="$ICON_IDLE" icon.drawing=on \
       label="mic?" label.drawing=on
@@ -246,7 +365,7 @@ resume_recording() {
 save_and_stop() {
   local pid
   pid="$(get_pid)"
-  [ -z "$pid" ] && cleanup_state && update_display && return
+  [ -z "$pid" ] && cleanup_state && restore_input_volume && update_display && return
 
   set_status "saving"
   if [ -f "$PAUSE_FILE" ]; then
@@ -255,6 +374,7 @@ save_and_stop() {
   fi
 
   kill -INT "$pid" 2>/dev/null
+  restore_input_volume
   update_display
 }
 
