@@ -56,6 +56,8 @@ fetch_tasks() {
   
   # API呼び出し
   response=$(curl -sS \
+    --connect-timeout 2 \
+    --max-time 5 \
     -H "Authorization: ApiKey $api_key" \
     "$API_URL" 2>/dev/null)
   exit_code=$?
@@ -139,6 +141,11 @@ pick_focus_task() {
   local task_count=$(echo "$tasks_data" | jq -r '.data | length')
   local focus_task=""
   local first_todo=""
+
+  if [ "$task_count" -le 0 ]; then
+    echo ""
+    return
+  fi
 
   for i in $(seq 0 $((task_count - 1))); do
     local task_title=$(echo "$tasks_data" | jq -r ".data[$i].title")

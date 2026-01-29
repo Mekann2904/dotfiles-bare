@@ -100,43 +100,6 @@ list_external_disks() {
   "$DISKUTIL_BIN" list external physical 2>/dev/null | awk '/^\/dev\/disk/ {print $1}'
 }
 
-# マウントポイント検出の強化関数
-find_mount_point() {
-  local phys_disk="$1"
-  local info_dump="$2"
-
-  # 1. 物理ディスク自体にマウントポイントがある場合 (HFS+など)
-  local direct_mount
-  direct_mount=$(echo "$info_dump" | awk -F': *' '/Mount Point/ {print $2; exit}')
-  if [ -n "$direct_mount" ] && [ "$direct_mount" != "Not mounted" ]; then
-    echo "$direct_mount"
-    return
-  fi
-
-  # 2. APFSコンテナを探し、そのボリュームのマウントを確認
-  local apfs_container
-  apfs_container=$("$DISKUTIL_BIN" list "$phys_disk" 2>/dev/null | awk '/Apple_APFS Container/ {print $NF; exit}')
-
-  if [ -n "$apfs_container" ]; then
-    local found_mount
-    found_mount=$(mount | grep "/dev/${apfs_container}" | head -1 | sed 's/.* on //; s/ (.*//')
-    if [ -n "$found_mount" ]; then
-      echo "$found_mount"
-      return
-    fi
-  fi
-
-  # 3. 通常のパーティション (disk2s1 など) がマウントされているか検索
-  local part_mount
-  part_mount=$(mount | grep "/dev/${phys_disk}s" | head -1 | sed 's/.* on //; s/ (.*//')
-  if [ -n "$part_mount" ]; then
-    echo "$part_mount"
-    return
-  fi
-
-  echo "未マウント"
-}
-
 build_entries() {
   local entries=()
 

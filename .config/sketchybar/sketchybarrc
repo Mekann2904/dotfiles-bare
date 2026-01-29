@@ -28,6 +28,8 @@ export MIN_WORKSPACE=1
 export MAX_WORKSPACE_DEFAULT=7
 export MAX_WORKSPACE="${WORKSPACE_RANGE_MAX:-$MAX_WORKSPACE_DEFAULT}"
 export EXTRA_WORKSPACES="T D"
+VISIBLE_ICON_SLOTS="${VISIBLE_ICON_SLOTS:-4}"
+export VISIBLE_ICON_SLOTS
 
 WALLPAPER_PRIMARY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/wallhaven-rqq3gm.png"
 WALLPAPER_KITTY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/kitty.png"
@@ -104,7 +106,9 @@ for sid in $(seq $workspace_min $workspace_max); do
       click_script="aerospace workspace $sid" \
       script="$CONFIG_DIR/plugins/aerospace.sh $sid"
 
-  for icon_slot in 1 2 3 4; do
+  icon_items=()
+  for icon_slot in $(seq 1 "$VISIBLE_ICON_SLOTS"); do
+    icon_items+=("space.$sid.icon${icon_slot}")
     sketchybar --add item space.$sid.icon${icon_slot} left \
       --set space.$sid.icon${icon_slot} \
         drawing=off \
@@ -127,10 +131,7 @@ for sid in $(seq $workspace_min $workspace_max); do
   # フォーカス中ワークスペースを下線で示す（色は白のまま）
   sketchybar --add bracket space.$sid.underline \
     space.$sid \
-    space.$sid.icon1 \
-    space.$sid.icon2 \
-    space.$sid.icon3 \
-    space.$sid.icon4 \
+    "${icon_items[@]}" \
     space.$sid.more \
     --set space.$sid.underline \
       drawing=off \
@@ -208,7 +209,9 @@ for idx in "${!special_workspaces[@]}"; do
       click_script="aerospace workspace $sid" \
       script="$CONFIG_DIR/plugins/aerospace.sh $sid"
 
-  for icon_slot in 1 2 3 4; do
+  icon_items=()
+  for icon_slot in $(seq 1 "$VISIBLE_ICON_SLOTS"); do
+    icon_items+=("space.$sid.icon${icon_slot}")
     sketchybar --add item space.$sid.icon${icon_slot} left \
       --set space.$sid.icon${icon_slot} \
         drawing=off \
@@ -230,10 +233,7 @@ for idx in "${!special_workspaces[@]}"; do
 
   sketchybar --add bracket space.$sid.underline \
     space.$sid \
-    space.$sid.icon1 \
-    space.$sid.icon2 \
-    space.$sid.icon3 \
-    space.$sid.icon4 \
+    "${icon_items[@]}" \
     space.$sid.more \
     --set space.$sid.underline \
       drawing=off \
@@ -292,7 +292,7 @@ sketchybar --add item workspace.refresh center \
     aerospace_workspace_change
 
 # Populate workspace tiles with the latest icons once on startup.
-sh "$PLUGIN_DIR/update_workspace_icons.sh"
+"$PLUGIN_DIR/update_workspace_icons.sh"
 
 
 
@@ -307,6 +307,7 @@ sh "$PLUGIN_DIR/update_workspace_icons.sh"
 # volume.sh script is only executed once an actual change in system audio
 # volume is registered. More info about the event system can be found here:
 # https://felixkratz.github.io/SketchyBar/config/events
+# ここで十分な横幅を確保して時計テキストとの重なりを防ぐ
 sketchybar --add item avatar right \
   --set avatar                                   \
       drawing=on                                 \
@@ -333,7 +334,6 @@ sketchybar --add item avatar right \
       popup.align=right \
       popup.y_offset=6 \
       popup.height=32 \
-      # ここで十分な横幅を確保して時計テキストとの重なりを防ぐ
       padding_left=4                              \
       padding_right=4                             \
       width=24                                    \
@@ -427,8 +427,6 @@ sketchybar --add item clock right \
              width=56 \
              padding_left=0 \
              padding_right=0 \
-             margin_left=1 \
-             margin_right=1 \
              label.width=56 \
              label.font="Hack Nerd Font Mono:Semibold:10.0" \
              label.align=center \

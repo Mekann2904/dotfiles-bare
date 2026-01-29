@@ -32,6 +32,15 @@ ICON_IMAGE_SCALE=${ICON_IMAGE_SCALE:-0.8}
 LOCK_DIR="${LOCK_DIR:-/tmp/skbar_wsicons.lock}"
 LOCK_RETRY_INTERVAL="${LOCK_RETRY_INTERVAL:-0.05}"
 LOCK_MAX_RETRY="${LOCK_MAX_RETRY:-40}"
+LOCK_STALE_SECS="${LOCK_STALE_SECS:-8}"
+
+lock_age_seconds() {
+  local now mtime
+  now=$(date +%s)
+  mtime=$(stat -f %m "$LOCK_DIR" 2>/dev/null || stat -c %Y "$LOCK_DIR" 2>/dev/null || echo 0)
+  [ "$mtime" -gt 0 ] || return 1
+  echo $((now - mtime))
+}
 
 cleanup_lock() {
   [ -d "$LOCK_DIR" ] && rmdir "$LOCK_DIR" >/dev/null 2>&1
@@ -42,6 +51,14 @@ acquire_lock() {
   local attempt=0
   log_debug "Attempting to acquire lock (max retries: $LOCK_MAX_RETRY)"
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    if [ -d "$LOCK_DIR" ]; then
+      local age
+      age=$(lock_age_seconds || echo 0)
+      if [ "$age" -gt "$LOCK_STALE_SECS" ]; then
+        log_debug "Stale lock detected (${age}s), removing"
+        rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
+      fi
+    fi
     attempt=$((attempt + 1))
     if [ "$attempt" -ge "$LOCK_MAX_RETRY" ]; then
       log_debug "Failed to acquire lock after $attempt attempts"

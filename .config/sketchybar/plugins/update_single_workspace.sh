@@ -227,7 +227,14 @@ main() {
     windows="$WINDOW_SNAPSHOT"
     log_debug "Using provided snapshot (${#ws_list[@]} workspaces)"
   else
-    windows="$(aerospace list-windows --workspace "${ws_list[@]}" --format '%{workspace}%{tab}%{app-name}' 2>/dev/null)" || windows=""
+    local ws_args=()
+    for ws in "${ws_list[@]}"; do
+      ws_args+=(--workspace "$ws")
+    done
+    if [ ${#ws_args[@]} -eq 0 ]; then
+      ws_args=(--all)
+    fi
+    windows="$(aerospace list-windows "${ws_args[@]}" --format '%{workspace}%{tab}%{app-name}' 2>/dev/null)" || windows=""
     if [ -z "$windows" ]; then
       log_debug "Empty snapshot; skipping update"
       return 0
