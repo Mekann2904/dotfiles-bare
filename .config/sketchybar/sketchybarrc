@@ -558,6 +558,18 @@ sketchybar --add item tasks right \
               popup.y_offset=5 \
               popup.height=30
 
+# タスクの隣に音声録音アイテムを配置。
+sketchybar --add item recording right \
+  --set recording script="$PLUGIN_DIR/recording.sh" \
+               update_freq=1 \
+               icon="󰍮" \
+               label="" \
+               padding_left=4 \
+               padding_right=4 \
+               margin_left=0 \
+               margin_right=0 \
+               click_script="$PLUGIN_DIR/recording.sh toggle"
+
 # 疑似ミニマイズ中のウィンドウをタスクアイコンの隣に並べる。
 sketchybar --add item hidden right \
   --set hidden \
