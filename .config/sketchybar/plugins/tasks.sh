@@ -260,8 +260,8 @@ main() {
   tasks_data=$(get_cached_tasks)
   
   if [ $? -ne 0 ] || [ -z "$tasks_data" ]; then
-    log_debug "No tasks data available, hide item"
-    sketchybar --set "$NAME" drawing=off label="" icon=""
+    log_debug "No tasks data available, show placeholder"
+    sketchybar --set "$NAME" drawing=on icon="󰓾" label="--"
     exit 0
   fi
   
@@ -274,8 +274,8 @@ main() {
   current_task=$(pick_focus_task "$tasks_data")
   
   if [ "$incomplete_count" -eq 0 ]; then
-    log_debug "No incomplete tasks, hide item"
-    sketchybar --set "$NAME" drawing=off label="" icon=""
+    log_debug "No incomplete tasks, show zero"
+    sketchybar --set "$NAME" drawing=on icon="󰓾" label="0"
     exit 0
   fi
 

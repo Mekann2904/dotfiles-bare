@@ -415,3 +415,19 @@ load_last_dir
 
 # opencode
 export PATH=/Users/mekann/.opencode/bin:$PATH
+
+# Composio CLI
+export COMPOSIO_INSTALL_DIR=/Users/mekann/.composio
+export PATH="/Users/mekann/.composio:$PATH"
+
+# Composio CLI
+export COMPOSIO_INSTALL_DIR=/Users/mekann/.composio
+export PATH="/Users/mekann/.composio:$PATH"
+
+# Composio CLI
+export COMPOSIO_INSTALL_DIR=/Users/mekann/.composio
+export PATH="/Users/mekann/.composio:$PATH"
+
+# Composio CLI
+export COMPOSIO_INSTALL_DIR=/Users/mekann/.composio
+export PATH="/Users/mekann/.composio:$PATH"
