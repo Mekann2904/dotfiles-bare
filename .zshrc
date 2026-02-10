@@ -168,8 +168,8 @@ function _load_nvm() {
         . "$NVM_DIR/nvm.sh"
     fi
 }
-for cmd in nvm node npm pnpm yarn; do
-    eval "function $cmd() { unset -f nvm node npm pnpm yarn; _load_nvm; $cmd \"\$@\"; }"
+for cmd in nvm node npm pnpm yarn pi; do
+    eval "function $cmd() { unset -f nvm node npm pnpm yarn pi; _load_nvm; $cmd \"\$@\"; }"
 done
 
 # --- Pyenv Lazy Load ---
