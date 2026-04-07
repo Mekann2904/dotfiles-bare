@@ -65,6 +65,7 @@ path=(
     "$HOME/.codeium/windsurf/bin"
     "$HOME/.cargo/bin"
     "$HOME/.spicetify"
+    "$NVM_DIR/versions/node/v22.12.0/bin"
     "$path[@]"
 )
 
@@ -168,8 +169,8 @@ function _load_nvm() {
         . "$NVM_DIR/nvm.sh"
     fi
 }
-for cmd in nvm node npm pnpm yarn pi; do
-    eval "function $cmd() { unset -f nvm node npm pnpm yarn pi; _load_nvm; $cmd \"\$@\"; }"
+for cmd in nvm node npm pnpm yarn pi playwright-cli; do
+    eval "function $cmd() { unset -f nvm node npm pnpm yarn pi playwright-cli; _load_nvm; $cmd \"\$@\"; }"
 done
 
 # --- Pyenv Lazy Load ---
@@ -256,6 +257,7 @@ alias codex='/Users/mekann/.config/nvm/versions/node/v22.12.0/bin/codex'
 alias python='/usr/bin/python3'
 alias kilocode='/Users/mekann/.config/nvm/versions/node/v22.12.0/bin/kilocode'
 alias cline='/Users/mekann/.config/nvm/versions/node/v22.12.0/bin/cline'
+alias pwcli='playwright-cli'
 
 # === 7. 関数 (Functions) ===
 function fixname {
@@ -431,3 +433,41 @@ export PATH="/Users/mekann/.composio:$PATH"
 # Composio CLI
 export COMPOSIO_INSTALL_DIR=/Users/mekann/.composio
 export PATH="/Users/mekann/.composio:$PATH"
+
+# bun completions
+[ -s "/Users/mekann/.bun/_bun" ] && source "/Users/mekann/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# >>> forge initialize >>>
+# !! Contents within this block are managed by 'forge zsh setup' !!
+# !! Do not edit manually - changes will be overwritten !!
+
+# Add required zsh plugins if not already present
+if [[ ! " ${plugins[@]} " =~ " zsh-autosuggestions " ]]; then
+    plugins+=(zsh-autosuggestions)
+fi
+if [[ ! " ${plugins[@]} " =~ " zsh-syntax-highlighting " ]]; then
+    plugins+=(zsh-syntax-highlighting)
+fi
+
+# Load forge shell plugin (commands, completions, keybindings) if not already loaded
+if [[ -z "$_FORGE_PLUGIN_LOADED" ]]; then
+    eval "$(forge zsh plugin)"
+fi
+
+# Load forge shell theme (prompt with AI context) if not already loaded
+if [[ -z "$_FORGE_THEME_LOADED" ]]; then
+    eval "$(forge zsh theme)"
+fi
+
+# Disable Nerd Fonts (set during setup - icons not displaying correctly)
+# To re-enable: remove this line and install a Nerd Font from https://www.nerdfonts.com/
+export NERD_FONT=0
+
+# Editor for editing prompts (set during setup)
+# To change: update FORGE_EDITOR or remove to use $EDITOR
+export FORGE_EDITOR="vim"
+# <<< forge initialize <<<
