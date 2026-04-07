@@ -80,6 +80,13 @@ case "${SENDER:-}" in
     force_event=1 ;;
 esac
 
+# 遅延再走査は、本当に反映が遅れやすいイベントだけに限定する。
+needs_second_pass=0
+case "${SENDER:-}" in
+  application_launched|application_terminated|window_created|window_destroyed)
+    needs_second_pass=1 ;;
+esac
+
 if [ "$force_event" -ne 1 ]; then
   NOW_TS=$(date +%s%N)
   if [ -f "$POLL_LOCK" ]; then
@@ -266,8 +273,8 @@ run_once() {
     SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}"
   fi
 
-  # --- アプリ起動/終了は少し遅らせてもう一度（遅延反映バグ対策） ---
-  if [ "$force_event" -eq 1 ]; then
+  # --- 起動・破棄系イベントだけ少し遅らせてもう一度（遅延反映バグ対策） ---
+  if [ "$needs_second_pass" -eq 1 ]; then
     if [ ${#targets[@]} -gt 0 ]; then
       ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
     else

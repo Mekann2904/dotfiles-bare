@@ -282,11 +282,12 @@ sketchybar --add item workspace.focus center \
     window_focused
 
 # 不可視アイテム: イベント＋ポーリングでアイコンを更新する。
+# ポーリングは取りこぼし対策の保険だけにする。
 sketchybar --add item workspace.refresh center \
   --set workspace.refresh \
     drawing=off \
     script="$CONFIG_DIR/plugins/workspace_events.sh" \
-    update_freq=${WORKSPACE_POLL_SECS:-1} \
+    update_freq=${WORKSPACE_POLL_SECS:-5} \
   --subscribe workspace.refresh \
     window_created \
     window_destroyed \
@@ -297,7 +298,8 @@ sketchybar --add item workspace.refresh center \
     aerospace_workspace_change
 
 # Populate workspace tiles with the latest icons once on startup.
-"$PLUGIN_DIR/update_workspace_icons.sh"
+# 起動時も通常運用と同じ高速経路に寄せる。
+"$PLUGIN_DIR/update_single_workspace.sh"
 
 # Populate workspace focus styles once on startup.
 "$PLUGIN_DIR/aerospace_focus.sh"
