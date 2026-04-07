@@ -1,9 +1,11 @@
 # ~/.config/aerospace/scripts/workspace-prev-visible.sh
 # ベースワークスペース(1〜7)のみを前に巡回する。
 # 隠しワークスペースを経由しない後退移動を保証するために存在する。
-# 関連ファイル: ~/.config/aerospace/scripts/workspace-next-visible.sh, ~/.config/aerospace/aerospace.toml, ~/.config/aerospace/scripts/pseudo-minimize.sh, ~/.config/aerospace/scripts/pseudo-restore.sh
-#!/usr/bin/env bash
+# 関連ファイル: ~/.config/aerospace/scripts/workspace-next-visible.sh, ~/.config/aerospace/scripts/common.sh, ~/.config/aerospace/aerospace.toml, ~/.config/aerospace/scripts/pseudo-restore.sh
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 order=(1 2 3 4 5 6 7)
 
@@ -17,7 +19,7 @@ log() {
 
 log_start
 
-current_ws="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | head -n1 | tr -d '[:space:]')"
+current_ws="$(current_workspace)"
 [ -n "$current_ws" ] || exit 0
 
 base_ws="${current_ws%-hidden}"
@@ -40,4 +42,4 @@ fi
 
 log "$base_ws" "$prev_ws"
 
-aerospace workspace "$prev_ws"
+"$AEROSPACE_BIN" workspace "$prev_ws"

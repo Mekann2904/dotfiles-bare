@@ -1,9 +1,11 @@
 # ~/.config/aerospace/scripts/workspace-next-visible.sh
 # ベースワークスペース(1〜7)のみを次に巡回する。
 # 隠しワークスペースを経由しない移動を保証するために存在する。
-# 関連ファイル: ~/.config/aerospace/scripts/workspace-prev-visible.sh, ~/.config/aerospace/aerospace.toml, ~/.config/aerospace/scripts/pseudo-minimize.sh, ~/.config/aerospace/scripts/pseudo-restore.sh
-#!/usr/bin/env bash
+# 関連ファイル: ~/.config/aerospace/scripts/workspace-prev-visible.sh, ~/.config/aerospace/scripts/common.sh, ~/.config/aerospace/aerospace.toml, ~/.config/aerospace/scripts/pseudo-minimize.sh
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 # 巡回対象のベースワークスペースを固定で持つ。
 order=(1 2 3 4 5 6 7)
@@ -19,7 +21,7 @@ log() {
 log_start
 
 # 現在のフォーカスWSを取得。空なら何もしない。
-current_ws="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | head -n1 | tr -d '[:space:]')"
+current_ws="$(current_workspace)"
 [ -n "$current_ws" ] || exit 0
 
 # hidden サフィックスを剥がし、ベース名だけにする。
@@ -46,4 +48,4 @@ fi
 log "$base_ws" "$next_ws"
 
 # フォーカス中モニタのベースWSへ移動するだけなので hidden を経由しない。
-aerospace workspace "$next_ws"
+"$AEROSPACE_BIN" workspace "$next_ws"

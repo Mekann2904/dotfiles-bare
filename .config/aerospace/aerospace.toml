@@ -27,7 +27,7 @@ after-login-command = []
 # 'after-startup-command' is run after 'after-login-command'
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
 # .config/aerospace/aeospace.toml
-after-startup-command = ['exec-and-forget borders']
+after-startup-command = ['exec-and-forget /bin/bash /Users/mekann/.config/aerospace/scripts/start-borders.sh']
 
 # Start AeroSpace at login
 start-at-login = true 
@@ -63,7 +63,7 @@ automatically-unhide-macos-hidden-apps = true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sketchybar 連携（トップレベル。on-window-detected の外に置くこと）
-exec-on-workspace-change = ['/bin/bash', '-c', 'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE PREV_WORKSPACE=$AEROSPACE_PREV_WORKSPACE && ~/.config/sketchybar/plugins/update_workspace_icons.sh']
+exec-on-workspace-change = ['/bin/bash', '/Users/mekann/.config/aerospace/scripts/workspace-change-hook.sh']
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Possible values: (qwerty|dvorak)
@@ -108,34 +108,18 @@ alt-shift-r = ['exec-and-forget /opt/homebrew/bin/sketchybar --reload']
 alt-g = 'balance-sizes'
 
 # 次/前のワークスペースへ（*-hidden は巡回対象外）
-alt-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
-  | grep -v -- '-hidden$' \
-  | grep -v -- '^T$' \
-  | grep -v -- '^D$' \
-  | aerospace workspace --stdin --wrap-around next"'''
+alt-n = 'exec-and-forget /bin/bash /Users/mekann/.config/aerospace/scripts/workspace-next-visible.sh'
 
-alt-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
-  | grep -v -- '-hidden$' \
-  | grep -v -- '^T$' \
-  | grep -v -- '^D$' \
-  | aerospace workspace --stdin --wrap-around prev"'''
+alt-b = 'exec-and-forget /bin/bash /Users/mekann/.config/aerospace/scripts/workspace-prev-visible.sh'
 
 # アプリを移動
-alt-shift-n = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
-  | grep -v -- '-hidden$' \
-  | grep -v -i -- '^t$' \
-  | grep -v -i -- '^d$' \
-  | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window next"'''
+alt-shift-n = 'exec-and-forget /bin/bash /Users/mekann/.config/aerospace/scripts/move-workspace-next-visible.sh'
 
-alt-shift-b = '''exec-and-forget /bin/bash -lc "aerospace list-workspaces --monitor focused --format '%{workspace}' \
-  | grep -v -- '-hidden$' \
-  | grep -v -i -- '^t$' \
-  | grep -v -i -- '^d$' \
-  | aerospace move-node-to-workspace --stdin --wrap-around --focus-follows-window prev"'''
+alt-shift-b = 'exec-and-forget /bin/bash /Users/mekann/.config/aerospace/scripts/move-workspace-prev-visible.sh'
 
 # 疑似ミニマイズ／復帰
-alt-m = '''exec-and-forget /Users/mekann/.config/aerospace/scripts/pseudo-minimize.sh'''
-alt-shift-m = '''exec-and-forget /Users/mekann/.config/aerospace/scripts/pseudo-restore.sh'''
+alt-m = 'exec-and-forget /bin/bash /Users/mekann/.config/aerospace/scripts/pseudo-minimize.sh'
+alt-shift-m = 'exec-and-forget /bin/bash /Users/mekann/.config/aerospace/scripts/pseudo-restore.sh'
 
 # タイル内の向き変更のみ許可（URL の誤記を修正）
 # See: https://nikitabobko.github.io/AeroSpace/commands#layout
@@ -169,8 +153,8 @@ alt-4 = 'workspace 4'
 alt-5 = 'workspace 5'
 alt-6 = 'workspace 6'
 alt-7 = 'workspace 7'
-alt-t = 'workspace t'
-alt-d = 'workspace d'
+alt-t = 'workspace T'
+alt-d = 'workspace D'
 
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#move-node-to-workspace
