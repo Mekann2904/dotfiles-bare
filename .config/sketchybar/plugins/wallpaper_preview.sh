@@ -20,9 +20,21 @@ fi
 dst_dir="$(dirname "$DST")"
 mkdir -p "$dst_dir"
 
-# sips で強制リサイズ（アスペクト比を無視して統一サイズにする）
-if command -v sips >/dev/null 2>&1; then
-  sips -z "$HEIGHT" "$WIDTH" "$SRC" --out "$DST" >/dev/null 2>&1
+# 縦横比は維持しつつ、固定サイズのキャンバス中央に収める。
+# まずは ImageMagick を優先し、無ければ sips の縮小だけでフォールバックする。
+if command -v magick >/dev/null 2>&1; then
+  magick "$SRC" \
+    -resize "${WIDTH}x${HEIGHT}" \
+    -background "#000000" \
+    -gravity center \
+    -extent "${WIDTH}x${HEIGHT}" \
+    "$DST" >/dev/null 2>&1
+elif command -v sips >/dev/null 2>&1; then
+  max_side="$WIDTH"
+  if [ "$HEIGHT" -gt "$WIDTH" ]; then
+    max_side="$HEIGHT"
+  fi
+  sips -Z "$max_side" "$SRC" --out "$DST" >/dev/null 2>&1
 else
   # sips が無い場合はそのままコピーし、背景サイズでスケールに任せる
   cp "$SRC" "$DST"

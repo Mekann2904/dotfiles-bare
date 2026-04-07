@@ -33,21 +33,51 @@ export VISIBLE_ICON_SLOTS
 
 WALLPAPER_PRIMARY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/wallhaven-rqq3gm.png"
 WALLPAPER_KITTY="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/kitty.png"
+WALLPAPER_E88X6R="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/wallhaven-e88x6r.png"
+WALLPAPER_8GG1DO="/Users/mekann/obsidian/040 STORAGE/999 除外データ/Public/wallhaven-8gg1do.jpg"
 PREVIEW_DIR="$CONFIG_DIR/cache/wallpaper_previews"
-PREVIEW_W=480
-PREVIEW_H=270
+WALLPAPER_POPUP_SIDE_INSET=220
+
+desktop_width() {
+  local bounds width
+  bounds="$(osascript -e 'tell application "Finder" to get bounds of window of desktop' 2>/dev/null | tr -d '{}')"
+  width="$(printf '%s' "$bounds" | awk -F', *' 'NF >= 3 { print $3 }')"
+
+  if [ -n "$width" ] && [ "$width" -gt 0 ] 2>/dev/null; then
+    printf '%s\n' "$width"
+    return 0
+  fi
+
+  printf '%s\n' 1512
+}
+
+DISPLAY_WIDTH="$(desktop_width)"
+WALLPAPER_POPUP_WIDTH=$(( (DISPLAY_WIDTH - WALLPAPER_POPUP_SIDE_INSET) / 4 ))
+
+# 極端に広すぎたり狭すぎたりしないよう軽く制限する。
+if [ "$WALLPAPER_POPUP_WIDTH" -lt 220 ]; then
+  WALLPAPER_POPUP_WIDTH=220
+fi
+
+if [ "$WALLPAPER_POPUP_WIDTH" -gt 320 ]; then
+  WALLPAPER_POPUP_WIDTH=320
+fi
+
+WALLPAPER_POPUP_PREVIEW_HEIGHT=$(( WALLPAPER_POPUP_WIDTH * 9 / 16 ))
+PREVIEW_W="$WALLPAPER_POPUP_WIDTH"
+PREVIEW_H="$WALLPAPER_POPUP_PREVIEW_HEIGHT"
 mkdir -p "$PREVIEW_DIR"
 WALLPAPER_PRIMARY_PREVIEW="$PREVIEW_DIR/wallhaven-rqq3gm.preview.png"
 WALLPAPER_KITTY_PREVIEW="$PREVIEW_DIR/kitty.preview.png"
+WALLPAPER_E88X6R_PREVIEW="$PREVIEW_DIR/wallhaven-e88x6r.preview.png"
+WALLPAPER_8GG1DO_PREVIEW="$PREVIEW_DIR/wallhaven-8gg1do.preview.png"
 
-# オリジナルが新しければプレビューを更新
-if [ "$WALLPAPER_PRIMARY" -nt "$WALLPAPER_PRIMARY_PREVIEW" ]; then
-  "$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_PRIMARY" "$WALLPAPER_PRIMARY_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
-fi
-
-if [ "$WALLPAPER_KITTY" -nt "$WALLPAPER_KITTY_PREVIEW" ]; then
-  "$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_KITTY" "$WALLPAPER_KITTY_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
-fi
+# 表示サイズぴったりのプレビューを毎回作り直す。
+# image.scale=1 のままでも見切れないよう、実表示サイズと揃える。
+"$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_PRIMARY" "$WALLPAPER_PRIMARY_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
+"$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_KITTY" "$WALLPAPER_KITTY_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
+"$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_E88X6R" "$WALLPAPER_E88X6R_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
+"$PLUGIN_DIR/wallpaper_preview.sh" "$WALLPAPER_8GG1DO" "$WALLPAPER_8GG1DO_PREVIEW" "$PREVIEW_W" "$PREVIEW_H"
 
 ##### Bar Appearance #####
 # Configuring the general appearance of the bar.
@@ -343,7 +373,7 @@ sketchybar --add item avatar right \
       popup.background.click_script="sketchybar --set avatar popup.drawing=off" \
       popup.align=right \
       popup.y_offset=6 \
-      popup.height=32 \
+      popup.height=$((WALLPAPER_POPUP_PREVIEW_HEIGHT + 10)) \
       padding_left=4                              \
       padding_right=4                             \
       width=24                                    \
@@ -351,86 +381,38 @@ sketchybar --add item avatar right \
       label.padding_left=0                       \
       label.padding_right=0
 
-# プレビュー付きの壁紙選択ポップアップ
-sketchybar --add item avatar.wallpaper_primary_preview popup.avatar \
-  --set avatar.wallpaper_primary_preview \
-    icon.drawing=off \
-    label="" \
-    background.drawing=on \
-    background.image="$WALLPAPER_PRIMARY_PREVIEW" \
-    background.image.scale=1 \
-    background.width=240 \
-    background.height=135 \
-    background.corner_radius=10 \
-    background.padding_left=6 \
-    background.padding_right=6 \
-    background.padding_top=6 \
-    background.padding_bottom=4 \
-    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_PRIMARY\" avatar" \
-    drawing=on
+# プレビュー付きの壁紙選択ポップアップ。
+# 画像だけのカードに絞り、縦並びで安定表示する。
+add_wallpaper_popup_item() {
+  local item_name="$1"
+  local preview_path="$2"
+  local source_path="$3"
 
-sketchybar --add item avatar.wallpaper_primary popup.avatar \
-  --set avatar.wallpaper_primary \
-    icon="󰸉" \
-    label="wallhaven" \
-    icon.drawing=on \
-    label.drawing=on \
-    icon.padding_left=4 \
-    icon.padding_right=6 \
-    label.padding_left=2 \
-    label.padding_right=6 \
-    label.width=240 \
-    label.align=center \
-    background.drawing=off \
-    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_PRIMARY\" avatar" \
-    drawing=on
+  sketchybar --add item "$item_name" popup.avatar \
+    --set "$item_name" \
+      width="$WALLPAPER_POPUP_WIDTH" \
+      icon.drawing=off \
+      label.drawing=off \
+      background.drawing=on \
+      background.image="$preview_path" \
+      background.image.scale=1 \
+      background.width="$WALLPAPER_POPUP_WIDTH" \
+      background.height="$WALLPAPER_POPUP_PREVIEW_HEIGHT" \
+      background.corner_radius=12 \
+      background.border_width=1 \
+      background.border_color=0x22FFFFFF \
+      background.padding_left=0 \
+      background.padding_right=0 \
+      background.padding_top=0 \
+      background.padding_bottom=0 \
+      click_script="$PLUGIN_DIR/wallpaper.sh \"$source_path\" avatar" \
+      drawing=on
+}
 
-sketchybar --add item avatar.wallpaper_kitty_preview popup.avatar \
-  --set avatar.wallpaper_kitty_preview \
-    icon.drawing=off \
-    label="" \
-    background.drawing=on \
-    background.image="$WALLPAPER_KITTY_PREVIEW" \
-    background.image.scale=1 \
-    background.width=240 \
-    background.height=135 \
-    background.corner_radius=10 \
-    background.padding_left=6 \
-    background.padding_right=6 \
-    background.padding_top=6 \
-    background.padding_bottom=4 \
-    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_KITTY\" avatar" \
-    drawing=on
-
-sketchybar --add item avatar.wallpaper_kitty popup.avatar \
-  --set avatar.wallpaper_kitty \
-    icon="󰄛" \
-    label="kitty" \
-    icon.drawing=on \
-    label.drawing=on \
-    icon.padding_left=4 \
-    icon.padding_right=6 \
-    label.padding_left=2 \
-    label.padding_right=6 \
-    label.width=240 \
-    label.align=center \
-    background.drawing=off \
-    click_script="$PLUGIN_DIR/wallpaper.sh \"$WALLPAPER_KITTY\" avatar" \
-    drawing=on
-
-sketchybar --add item avatar.popup_close popup.avatar \
-  --set avatar.popup_close \
-    icon="󰅖" \
-    label="閉じる" \
-    icon.drawing=on \
-    label.drawing=on \
-    icon.padding_left=4 \
-    icon.padding_right=6 \
-    label.padding_left=2 \
-    label.padding_right=6 \
-    background.drawing=off \
-    click_script="sketchybar --set avatar popup.drawing=off" \
-    drawing=on
+add_wallpaper_popup_item "avatar.wallpaper_primary" "$WALLPAPER_PRIMARY_PREVIEW" "$WALLPAPER_PRIMARY"
+add_wallpaper_popup_item "avatar.wallpaper_kitty" "$WALLPAPER_KITTY_PREVIEW" "$WALLPAPER_KITTY"
+add_wallpaper_popup_item "avatar.wallpaper_e88x6r" "$WALLPAPER_E88X6R_PREVIEW" "$WALLPAPER_E88X6R"
+add_wallpaper_popup_item "avatar.wallpaper_8gg1do" "$WALLPAPER_8GG1DO_PREVIEW" "$WALLPAPER_8GG1DO"
 
 sketchybar --add item clock right \
   --set clock update_freq=1 script="$PLUGIN_DIR/clock.sh" \
