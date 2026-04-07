@@ -2,7 +2,7 @@
 # plugins/wallpaper.sh
 # デスクトップ壁紙を指定パスに切り替えるシンプルなコマンド。
 # アバターポップアップから即時に壁紙を切り替えるために存在する。
-# 関連ファイル: sketchybarrc, plugins/clock.sh, plugins/tasks.sh, plugins/user.png
+# 関連ファイル: sketchybarrc, plugins/clock.sh, plugins/wallpaper_list.sh, plugins/user.png
 
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 

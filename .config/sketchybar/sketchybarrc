@@ -541,43 +541,7 @@ sketchybar --add item disk.close popup.disk \
     click_script="sketchybar --set disk popup.drawing=off" \
     drawing=on
 
-##### Adding Tasks Item with Popup #####
-sketchybar --add item tasks right \
-   --set tasks script="$PLUGIN_DIR/tasks.sh" \
-              update_freq=3600 \
-              icon="󰓾" \
-              label="0" \
-              padding_left=4 \
-              padding_right=4 \
-              margin_left=0 \
-              margin_right=0 \
-              click_script="sketchybar --set tasks popup.drawing=on" \
-              popup.background.color=0xF2000000 \
-              popup.background.blur_radius=30 \
-              popup.background.corner_radius=8 \
-              popup.background.padding_left=10 \
-              popup.background.padding_right=10 \
-              popup.background.padding_top=10 \
-              popup.background.padding_bottom=10 \
-              popup.background.click_script="sketchybar --set tasks popup.drawing=off" \
-              popup.align=center \
-              popup.y_offset=5 \
-              popup.height=30
-
-# タスクの隣に音声録音アイテムを配置。
-sketchybar --add item recording right \
-  --set recording script="$PLUGIN_DIR/recording.sh" \
-               update_freq=1 \
-               drawing=off \
-               icon="󰍮" \
-               label="" \
-               padding_left=4 \
-               padding_right=4 \
-               margin_left=0 \
-               margin_right=0 \
-               click_script="$PLUGIN_DIR/recording.sh toggle"
-
-# 疑似ミニマイズ中のウィンドウをタスクアイコンの隣に並べる。
+# 疑似ミニマイズ中のウィンドウを右側に並べる。
 sketchybar --add item hidden right \
   --set hidden \
     script="$PLUGIN_DIR/hidden_windows.sh" \
@@ -614,50 +578,6 @@ for i in $(seq 1 4); do
       padding_left=2 \
       padding_right=2
 done
-
-# Add popup task items (dynamically managed by tasks.sh)
-for i in $(seq 1 10); do
-  sketchybar --add item task.$i popup.tasks \
-    --set task.$i \
-      icon.drawing=on \
-      icon.padding_left=4 \
-      icon.padding_right=4 \
-      label.drawing=on \
-      label.padding_left=4 \
-      label.padding_right=4 \
-      background.drawing=off \
-      click_script="sketchybar --set tasks popup.drawing=off" \
-      drawing=off
-done
-
-# Add reload and close buttons to popup
-sketchybar --add item task.reload popup.tasks \
-  --set task.reload \
-    icon="󰑐" \
-    label="再読み込み" \
-    icon.drawing=on \
-    label.drawing=on \
-    icon.padding_left=4 \
-    icon.padding_right=4 \
-    label.padding_left=4 \
-    label.padding_right=4 \
-    background.drawing=off \
-    click_script="rm /tmp/sketchybar_tasks_cache && NAME=tasks $CONFIG_DIR/plugins/tasks.sh && sketchybar --set tasks popup.drawing=on" \
-    drawing=on
-
-sketchybar --add item task.close popup.tasks \
-  --set task.close \
-    icon="󰅖" \
-    label="閉じる" \
-    icon.drawing=on \
-    label.drawing=on \
-    icon.padding_left=4 \
-    icon.padding_right=4 \
-    label.padding_left=4 \
-    label.padding_right=4 \
-    background.drawing=off \
-    click_script="sketchybar --set tasks popup.drawing=off" \
-    drawing=on
 
 ##### Force all scripts to run the first time (never do this in a script) #####
 sketchybar --update

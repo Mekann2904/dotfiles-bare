@@ -1,6 +1,8 @@
 #!/bin/bash
 # plugins/setup_keychain.sh
-# KeychainにAPIキーを登録するスクリプト
+# DeepSeek 用の API キーを Keychain に登録するセットアップスクリプト。
+# バーで使う外部 API 認証を 1 か所で管理するために存在する。
+# 関連ファイル: sketchybarrc, plugins/deepseek.sh, plugins/wallpaper.sh
 
 setup_keychain() {
   local service_name="$1"
@@ -54,40 +56,20 @@ done
 
 echo ""
 
-# Tasks APIキーのセットアップ
-echo "Tasks APIキーをKeychainに登録します"
-echo ""
-
-TASKS_API_KEY=""
-while [ -z "$TASKS_API_KEY" ]; do
-  read -s -p "Tasks APIキーを入力してください: " TASKS_API_KEY
-  echo ""
-
-  if [ -z "$TASKS_API_KEY" ]; then
-    echo "エラー: APIキーが入力されませんでした"
-  fi
-done
-
-echo ""
-
-# 両方のAPIキーをKeychainに登録
+# APIキーをKeychainに登録
 setup_keychain "sketchybar-deepseek" "DeepSeek" "$DEEPSEEK_API_KEY"
 DEEPSEEK_RESULT=$?
-
-setup_keychain "sketchybar-tasks" "Tasks" "$TASKS_API_KEY"
-TASKS_RESULT=$?
 
 echo ""
 echo "確認コマンド:"
 echo "  DeepSeek: security find-generic-password -s 'sketchybar-deepseek' -a 'api-key' -w"
-echo "  Tasks:    security find-generic-password -s 'sketchybar-tasks' -a 'api-key' -w"
 
-if [ $DEEPSEEK_RESULT -eq 0 ] && [ $TASKS_RESULT -eq 0 ]; then
+if [ $DEEPSEEK_RESULT -eq 0 ]; then
   echo ""
-  echo "✓ 全てのAPIキーをKeychainに正常に登録しました"
+  echo "✓ APIキーをKeychainに正常に登録しました"
   exit 0
 else
   echo ""
-  echo "✗ 一部のAPIキーの登録に失敗しました"
+  echo "✗ APIキーの登録に失敗しました"
   exit 1
 fi
