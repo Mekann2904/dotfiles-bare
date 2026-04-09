@@ -112,6 +112,8 @@ sketchybar --default "${default[@]}"
 
 # Add the aerospace_workspace_change event we specified in aerospace.toml
 sketchybar --add event aerospace_workspace_change
+sketchybar --add event workspace_manual_change
+sketchybar --add event workspace_content_change
 sketchybar --add event volume_change
 
 # Add a fixed strip of workspaces 1 through $MAX_WORKSPACE
@@ -132,7 +134,7 @@ for sid in $(seq $workspace_min $workspace_max); do
       icon.padding_right=4 \
       label="" \
       label.drawing=off \
-      click_script="aerospace workspace $sid"
+      click_script="$PLUGIN_DIR/workspace_select.sh $sid"
 
   icon_items=()
   for icon_slot in $(seq 1 "$VISIBLE_ICON_SLOTS"); do
@@ -153,7 +155,7 @@ for sid in $(seq $workspace_min $workspace_max); do
         icon.background.image.scale=0.8 \
         label="" \
         label.drawing=off \
-        click_script="aerospace workspace $sid"
+        click_script="$PLUGIN_DIR/workspace_select.sh $sid"
   done
 
   # フォーカス中ワークスペースを下線で示す（色は白のまま）
@@ -185,7 +187,7 @@ for sid in $(seq $workspace_min $workspace_max); do
       label.color=0x99FFFFFF \
       label.padding_left=2 \
       label.padding_right=2 \
-      click_script="aerospace workspace $sid"
+      click_script="$PLUGIN_DIR/workspace_select.sh $sid"
 
   if [ "$sid" -lt $workspace_max ]; then
     sketchybar --add item space.$sid.separator left \
@@ -233,7 +235,7 @@ for idx in "${!special_workspaces[@]}"; do
       icon.padding_right=4 \
       label="" \
       label.drawing=off \
-      click_script="aerospace workspace $sid"
+      click_script="$PLUGIN_DIR/workspace_select.sh $sid"
 
   icon_items=()
   for icon_slot in $(seq 1 "$VISIBLE_ICON_SLOTS"); do
@@ -254,7 +256,7 @@ for idx in "${!special_workspaces[@]}"; do
         icon.background.image.scale=0.8 \
         label="" \
         label.drawing=off \
-        click_script="aerospace workspace $sid"
+        click_script="$PLUGIN_DIR/workspace_select.sh $sid"
   done
 
   sketchybar --add bracket space.$sid.underline \
@@ -285,7 +287,7 @@ for idx in "${!special_workspaces[@]}"; do
       label.color=0x99FFFFFF \
       label.padding_left=2 \
       label.padding_right=2 \
-      click_script="aerospace workspace $sid"
+      click_script="$PLUGIN_DIR/workspace_select.sh $sid"
 
   if [ "$idx" -lt $((${#special_workspaces[@]} - 1)) ]; then
     sketchybar --add item space.$sid.separator left \
@@ -310,6 +312,8 @@ sketchybar --add item workspace.refresh center \
     script="$CONFIG_DIR/plugins/workspace_events.sh" \
     update_freq=${WORKSPACE_POLL_SECS:-5} \
   --subscribe workspace.refresh \
+    workspace_manual_change \
+    workspace_content_change \
     window_created \
     window_destroyed \
     application_launched \
