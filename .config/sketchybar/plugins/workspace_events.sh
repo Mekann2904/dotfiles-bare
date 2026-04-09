@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # plugins/workspace_events.sh
-# ワークスペース・アプリ監視の軽量ポーリング＋イベントエントリーポイント。
-# AeroSpaceイベントと定期ポーリングを併用し、安定かつ高速にアイコン更新するために存在する。
-# 関連ファイル: sketchybarrc, plugins/update_single_workspace.sh, plugins/space_windows.sh, plugins/icon_map_fn.sh
+# ワークスペース関連の更新を集約する coordinator。
+# 同じ AeroSpace スナップショットから workspace 群と hidden 表示をまとめて更新するために存在する。
+# 関連ファイル: sketchybarrc, plugins/update_single_workspace.sh, plugins/hidden_windows.sh
 
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 UPDATE_SCRIPT="$CONFIG_DIR/plugins/update_single_workspace.sh"
+SCRIPT_SELF="${BASH_SOURCE[0]:-$0}"
 
 # --- チューニング値 ---
 MIN_INTERVAL_DEFAULT_NS=300000000   # 0.3s をナノ秒表現
@@ -76,7 +77,7 @@ POLL_LOCK="${POLL_LOCK:-/tmp/sketchybar_ws_poll.lock}"
 
 force_event=0
 case "${SENDER:-}" in
-  application_launched|application_terminated|window_created|window_destroyed|front_app_switched|aerospace_workspace_change|window_focused)
+  forced|delayed|application_launched|application_terminated|window_created|window_destroyed|front_app_switched|aerospace_workspace_change|window_focused)
     force_event=1 ;;
 esac
 
@@ -123,7 +124,18 @@ fi
 
 # --- スナップショット取得（失敗時は短い遅延後に再試行） ---
 capture_snapshot() {
-  aerospace list-windows --all --format '%{workspace}%{tab}%{app-name}' 2>/dev/null || true
+  aerospace list-windows --all --format '%{workspace}%{tab}%{window-id}%{tab}%{app-name}' 2>/dev/null || true
+}
+
+capture_focused_workspace() {
+  aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | awk 'NR==1 { gsub(/[[:space:]]+/, ""); print; exit }'
+}
+
+base_workspace() {
+  local ws="$1"
+  ws="$(trim "$ws")"
+  ws="${ws%-hidden}"
+  printf '%s\n' "$ws"
 }
 
 MIN_WORKSPACE_NUM=${MIN_WORKSPACE:-1}
@@ -193,7 +205,7 @@ build_state_lines() {
   awk -F'\t' -v sep="\034" '
     NR==FNR { order[++n]=$1; want[$1]=1; next }
     {
-      ws=$1; app=$2
+      ws=$1; app=$3
       sub(/^[[:space:]]+|[[:space:]]+$/, "", ws)
       sub(/^[[:space:]]+|[[:space:]]+$/, "", app)
       if (ws=="" || !(ws in want)) next
@@ -217,6 +229,9 @@ run_once() {
     WINDOW_SNAPSHOT="$(capture_snapshot)"
   fi
   export WINDOW_SNAPSHOT
+  FOCUSED_WORKSPACE="$(capture_focused_workspace)"
+  HIDDEN_BASE_WORKSPACE="$(base_workspace "$FOCUSED_WORKSPACE")"
+  export FOCUSED_WORKSPACE HIDDEN_BASE_WORKSPACE
 
   OLD_STATE="$(cat "$STATE_FILE" 2>/dev/null || true)"
   NEW_STATE="$(build_state_lines)"
@@ -257,9 +272,10 @@ run_once() {
         mapfile -t targets < <(snapshot_workspaces | while read -r ws; do is_supported_ws "$ws" && printf '%s\n' "$ws"; done)
         ;;
       *)
-        focused="$(aerospace list-workspaces --focused --format '%{workspace}' 2>/dev/null | tr -d '[:space:]')"
-        if [ -n "$focused" ] && is_supported_ws "$focused"; then
-          targets=("$focused")
+        if [ -n "$FOCUSED_WORKSPACE" ] && is_supported_ws "$FOCUSED_WORKSPACE"; then
+          targets=("$FOCUSED_WORKSPACE")
+        elif [ -n "$HIDDEN_BASE_WORKSPACE" ] && is_supported_ws "$HIDDEN_BASE_WORKSPACE"; then
+          targets=("$HIDDEN_BASE_WORKSPACE")
         fi
         ;;
     esac
@@ -267,19 +283,18 @@ run_once() {
 
   if [ ${#targets[@]} -eq 0 ]; then
     log "Running update for all workspaces (poll)"
-    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT"
+    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" WINDOW_SNAPSHOT="$WINDOW_SNAPSHOT" "$UPDATE_SCRIPT"
   else
     log "Running update for: ${targets[*]}"
-    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}"
+    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" WINDOW_SNAPSHOT="$WINDOW_SNAPSHOT" "$UPDATE_SCRIPT" "${targets[@]}"
   fi
 
   # --- 起動・破棄系イベントだけ少し遅らせてもう一度（遅延反映バグ対策） ---
   if [ "$needs_second_pass" -eq 1 ]; then
-    if [ ${#targets[@]} -gt 0 ]; then
-      ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" "${targets[@]}" ) &
-    else
-      ( sleep "$SECOND_PASS_DELAY"; SENDER="delayed" DEBUG_LOG="$DEBUG_LOG" "$UPDATE_SCRIPT" ) &
-    fi
+    (
+      sleep "$SECOND_PASS_DELAY"
+      SENDER="delayed" INFO="${INFO:-}" DEBUG_LOG="$DEBUG_LOG" "$SCRIPT_SELF"
+    ) &
   fi
 
   return 0

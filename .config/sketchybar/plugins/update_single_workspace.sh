@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # plugins/update_single_workspace.sh
-# シンプルで高速なワークスペースアイコン更新スクリプト
-# ロック機構を排除し、対象ワークスペースのみを更新することで高速化
-# 関連ファイル: sketchybarrc, plugins/workspace_events.sh
+# ワークスペース群の見た目をまとめて描画する高速レンダラー。
+# 同じスナップショットからフォーカス装飾・アプリアイコン・hidden表示を揃えて更新するために存在する。
+# 関連ファイル: sketchybarrc, plugins/workspace_events.sh, plugins/hidden_windows.sh
 
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
 SKETCHYBAR_BIN="${BAR_NAME:-sketchybar}"
+HIDDEN_RESTORE_SCRIPT="$CONFIG_DIR/plugins/hidden_windows.sh"
 
 # フェイルセーフ: 空スナップショット時は即終了し、呼び出し元が再試行する
 if [ -z "${WINDOW_SNAPSHOT:-}" ]; then
@@ -16,7 +17,7 @@ fi
 case "${SENDER:-}" in
   ""|poll|timer|routine|forced)
     ;;  # ポーリングや手動実行を許可
-  aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
+  delayed|aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
     ;;  # イベント実行も許可
   *)
     exit 0
@@ -59,6 +60,14 @@ ICON_WIDTH=${ICON_WIDTH:-16}
 ICON_HEIGHT=${ICON_HEIGHT:-16}
 ICON_ITEM_WIDTH=${ICON_ITEM_WIDTH:-24}
 ICON_IMAGE_SCALE=${ICON_IMAGE_SCALE:-0.8}
+HIDDEN_ICON_SLOTS=${HIDDEN_ICON_SLOTS:-4}
+HIDDEN_ICON_SCALE=${HIDDEN_ICON_SCALE:-0.8}
+HIDDEN_ICON_BG_HEIGHT=${HIDDEN_ICON_BG_HEIGHT:-16}
+HIDDEN_ITEM_WIDTH=${HIDDEN_ITEM_WIDTH:-24}
+
+FOCUSED_WORKSPACE="${FOCUSED_WORKSPACE:-}"
+HIDDEN_BASE_WORKSPACE="${HIDDEN_BASE_WORKSPACE:-}"
+CMD=()
 
 # 区切り文字（アプリ名には通常含まれない制御文字）
 SEP=$'\034'
@@ -116,8 +125,7 @@ update_workspace_icons() {
 
   log_debug "Updating ws=$workspace total=$total_count"
 
-  local cmd=("$SKETCHYBAR_BIN")
-  cmd+=(--set "space.$workspace" drawing=on icon="$workspace" icon.drawing=on)
+  CMD+=(--set "space.$workspace" drawing=on icon="$workspace" icon.drawing=on)
 
   local apps_arr=() shown=0
   if [ -n "$apps_joined" ]; then
@@ -135,7 +143,7 @@ update_workspace_icons() {
     local item="space.$workspace.icon$slot"
     if [ "$slot" -le "$shown" ]; then
       local app="${apps_arr[$((slot-1))]}"
-      cmd+=(--set "$item"
+      CMD+=(--set "$item"
         drawing=on
         width="$ICON_ITEM_WIDTH"
         icon=" "
@@ -153,7 +161,7 @@ update_workspace_icons() {
         label.drawing=off
       )
     else
-      cmd+=(--set "$item"
+      CMD+=(--set "$item"
         drawing=off
         width=0
         padding_left=0
@@ -167,7 +175,7 @@ update_workspace_icons() {
   done
 
   if [ "$extra_count" -gt 0 ]; then
-    cmd+=(--set "space.$workspace.more"
+    CMD+=(--set "space.$workspace.more"
       drawing=on
       width="$ICON_ITEM_WIDTH"
       icon.drawing=off
@@ -177,7 +185,7 @@ update_workspace_icons() {
       label.padding_right=2
     )
   else
-    cmd+=(--set "space.$workspace.more"
+    CMD+=(--set "space.$workspace.more"
       drawing=off
       width=0
       padding_left=0
@@ -187,8 +195,120 @@ update_workspace_icons() {
     )
   fi
 
-  "${cmd[@]}" >/dev/null 2>&1 || true
   perf_end "update_workspace_$workspace" "$t0"
+}
+
+apply_focus_state() {
+  local ws
+  for ws in $(workspace_list); do
+    if [ "$ws" = "$FOCUSED_WORKSPACE" ]; then
+      CMD+=(--set "space.$ws"
+        icon.color=0xFFFFFFFF
+        icon.font="Hack Nerd Font:Bold:16.0"
+        background.drawing=off
+      )
+      CMD+=(--set "space.$ws.underline"
+        drawing=on
+        background.drawing=on
+      )
+    else
+      CMD+=(--set "space.$ws"
+        icon.color=0x88FFFFFF
+        icon.font="Hack Nerd Font:Semibold:16.0"
+        background.drawing=off
+      )
+      CMD+=(--set "space.$ws.underline"
+        drawing=off
+        background.drawing=off
+      )
+    fi
+  done
+}
+
+apply_hidden_state() {
+  local hidden_ws hidden_entries hidden_count slot win_id app_name item
+
+  if [ -z "$HIDDEN_BASE_WORKSPACE" ]; then
+    CMD+=(--set hidden drawing=off icon.drawing=off label="" label.drawing=off)
+    for slot in $(seq 1 "$HIDDEN_ICON_SLOTS"); do
+      CMD+=(--set "hidden.icon${slot}"
+        drawing=off
+        width=0
+        icon.drawing=off
+        background.drawing=off
+        click_script=""
+      )
+    done
+    return 0
+  fi
+
+  hidden_ws="${HIDDEN_BASE_WORKSPACE}-hidden"
+  hidden_entries="$(
+    printf '%s\n' "$windows" | awk -F'\t' -v target="$hidden_ws" '
+      {
+        ws=$1
+        win_id=$2
+        app=$3
+        sub(/^[[:space:]]+/, "", ws);     sub(/[[:space:]]+$/, "", ws)
+        sub(/^[[:space:]]+/, "", win_id); sub(/[[:space:]]+$/, "", win_id)
+        sub(/^[[:space:]]+/, "", app);    sub(/[[:space:]]+$/, "", app)
+        if (ws != target || win_id == "" || app == "") next
+        print win_id "\t" app
+      }
+    '
+  )"
+
+  hidden_count=$(printf '%s\n' "$hidden_entries" | awk 'NF { count++ } END { print count + 0 }')
+  CMD+=(--set hidden drawing=off icon.drawing=off label="" label.drawing=off)
+
+  if [ "$hidden_count" -eq 0 ]; then
+    for slot in $(seq 1 "$HIDDEN_ICON_SLOTS"); do
+      CMD+=(--set "hidden.icon${slot}"
+        drawing=off
+        width=0
+        icon.drawing=off
+        background.drawing=off
+        click_script=""
+      )
+    done
+    return 0
+  fi
+
+  slot=1
+  while IFS=$'\t' read -r win_id app_name; do
+    [ -n "$win_id" ] || continue
+    [ -n "$app_name" ] || continue
+    [ "$slot" -le "$HIDDEN_ICON_SLOTS" ] || break
+
+    item="hidden.icon${slot}"
+    CMD+=(--set "$item"
+      drawing=on
+      width="$HIDDEN_ITEM_WIDTH"
+      icon.drawing=off
+      label.drawing=off
+      "background.image=app.$app_name"
+      background.drawing=on
+      "background.image.scale=$HIDDEN_ICON_SCALE"
+      "background.height=$HIDDEN_ICON_BG_HEIGHT"
+      background.corner_radius=3
+      background.y_offset=0
+      padding_left=0
+      padding_right=0
+      "click_script=$HIDDEN_RESTORE_SCRIPT restore $win_id"
+    )
+    slot=$((slot + 1))
+  done <<<"$hidden_entries"
+
+  while [ "$slot" -le "$HIDDEN_ICON_SLOTS" ]; do
+    CMD+=(--set "hidden.icon${slot}"
+      drawing=off
+      width=0
+      icon.drawing=off
+      background.drawing=off
+      click_script=""
+    )
+    slot=$((slot + 1))
+  done
 }
 
 main() {
@@ -227,18 +347,8 @@ main() {
     windows="$WINDOW_SNAPSHOT"
     log_debug "Using provided snapshot (${#ws_list[@]} workspaces)"
   else
-    local ws_args=()
-    for ws in "${ws_list[@]}"; do
-      ws_args+=(--workspace "$ws")
-    done
-    if [ ${#ws_args[@]} -eq 0 ]; then
-      ws_args=(--all)
-    fi
-    windows="$(aerospace list-windows "${ws_args[@]}" --format '%{workspace}%{tab}%{app-name}' 2>/dev/null)" || windows=""
-    if [ -z "$windows" ]; then
-      log_debug "Empty snapshot; skipping update"
-      return 0
-    fi
+    windows="$(aerospace list-windows --all --format '%{workspace}%{tab}%{window-id}%{tab}%{app-name}' 2>/dev/null)" || windows=""
+    [ -n "$windows" ] || log_debug "Empty snapshot; rendering empty state"
   fi
 
   local grouped
@@ -246,7 +356,7 @@ main() {
     awk -F'\t' -v sep="$SEP" -v slots="$VISIBLE_ICON_SLOTS" '
       NR==FNR { order[++n]=$0; want[$0]=1; next }
       {
-        ws=$1; app=$2
+        ws=$1; app=$3
         sub(/^[[:space:]]+/, "", ws);  sub(/[[:space:]]+$/, "", ws)
         sub(/^[[:space:]]+/, "", app); sub(/[[:space:]]+$/, "", app)
         if (ws=="" || app=="" || !(ws in want)) next
@@ -271,11 +381,18 @@ main() {
     ' <(printf '%s\n' "${ws_list[@]}") <(printf '%s\n' "$windows")
   )"
 
+  CMD=("$SKETCHYBAR_BIN")
+  apply_focus_state
+
   local line ws count list
   while IFS=$'\t' read -r ws count list; do
     [ -n "$ws" ] || continue
     update_workspace_icons "$ws" "${count:-0}" "$list"
   done <<<"$grouped"
+
+  apply_hidden_state
+
+  [ "${#CMD[@]}" -gt 1 ] && "${CMD[@]}" >/dev/null 2>&1 || true
 
   return 0
 }
