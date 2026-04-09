@@ -302,16 +302,7 @@ for idx in "${!special_workspaces[@]}"; do
   fi
 done
 
-# 不可視アイテム: フォーカス表示を集約更新する。
-sketchybar --add item workspace.focus center \
-  --set workspace.focus \
-    drawing=off \
-    script="$CONFIG_DIR/plugins/aerospace_focus.sh" \
-  --subscribe workspace.focus \
-    aerospace_workspace_change \
-    window_focused
-
-# 不可視アイテム: イベント＋ポーリングでアイコンを更新する。
+# 不可視アイテム: workspace 周り全体の更新を集約する。
 # ポーリングは取りこぼし対策の保険だけにする。
 sketchybar --add item workspace.refresh center \
   --set workspace.refresh \
@@ -327,12 +318,8 @@ sketchybar --add item workspace.refresh center \
     window_focused \
     aerospace_workspace_change
 
-# Populate workspace tiles with the latest icons once on startup.
-# 起動時も通常運用と同じ高速経路に寄せる。
-"$PLUGIN_DIR/update_single_workspace.sh"
-
-# Populate workspace focus styles once on startup.
-"$PLUGIN_DIR/aerospace_focus.sh"
+# 起動時も通常運用と同じ coordinator 経路に寄せる。
+SENDER=forced "$PLUGIN_DIR/workspace_events.sh"
 
 
 
@@ -528,23 +515,13 @@ sketchybar --add item disk.close popup.disk \
 # 疑似ミニマイズ中のウィンドウを右側に並べる。
 sketchybar --add item hidden right \
   --set hidden \
-    script="$PLUGIN_DIR/hidden_windows.sh" \
-    update_freq=3 \
     icon="󰘚" \
     icon.font="Hack Nerd Font:Semibold:13.0" \
     icon.color=0x99FFFFFF \
     label="" \
     padding_left=4 \
     padding_right=2 \
-    drawing=off \
-  --subscribe hidden \
-    aerospace_workspace_change \
-    window_created \
-    window_destroyed \
-    front_app_switched \
-    window_focused \
-    application_launched \
-    application_terminated
+    drawing=off
 
 for i in $(seq 1 4); do
   sketchybar --add item hidden.icon${i} right \
