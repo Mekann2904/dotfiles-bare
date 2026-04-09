@@ -63,8 +63,8 @@ swap_workspaces() {
         aerospace workspace "$current_ws" 2>/dev/null || true
     fi
 
-    # SketchyBarを更新
-    sketchybar --trigger aerospace_workspace_change
+    # 入れ替えで内容が変わる対象だけ full update する。
+    sketchybar --trigger workspace_content_change INFO="$ws1 $ws2 $current_ws"
 }
 
 # ドラッグ開始

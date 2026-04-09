@@ -13,12 +13,13 @@ MIN_INTERVAL_DEFAULT_NS=300000000   # 0.3s をナノ秒表現
 POLL_INTERVAL_DEFAULT=0.7           # update_freq からのフォールバック
 STATE_FILE="${POLL_STATE_FILE:-/tmp/sketchybar_ws_state.tsv}"
 SECOND_PASS_DELAY="${SECOND_PASS_DELAY:-0.35}" # アプリ起動直後の追いかけ再走査
+FOCUS_EVENT_DEBOUNCE_DELAY="${FOCUS_EVENT_DEBOUNCE_DELAY:-0}"
+CONTENT_EVENT_DEBOUNCE_DELAY="${CONTENT_EVENT_DEBOUNCE_DELAY:-0.03}"
 
 # --- イベント合流（高速連続切替対策） ---
 EVENT_LOCK_DIR="${WS_EVENT_LOCK_DIR:-/tmp/sketchybar_ws_event.lock}"
 EVENT_PENDING_FILE="${WS_EVENT_PENDING_FILE:-/tmp/sketchybar_ws_event.pending}"
 EVENT_LOCK_STALE_SECS="${WS_EVENT_LOCK_STALE_SECS:-3}"
-EVENT_DEBOUNCE_DELAY="${WS_EVENT_DEBOUNCE_DELAY:-0.03}"
 EVENT_MAX_RERUNS="${WS_EVENT_MAX_RERUNS:-3}"
 
 # --- ログ設定 ---
@@ -77,9 +78,60 @@ POLL_LOCK="${POLL_LOCK:-/tmp/sketchybar_ws_poll.lock}"
 
 force_event=0
 case "${SENDER:-}" in
-  forced|delayed|application_launched|application_terminated|window_created|window_destroyed|front_app_switched|aerospace_workspace_change|window_focused)
+  forced|delayed|workspace_manual_change|workspace_content_change|application_launched|application_terminated|window_created|window_destroyed|front_app_switched|aerospace_workspace_change|window_focused)
     force_event=1 ;;
 esac
+
+focus_only_sender() {
+  case "${1:-}" in
+    front_app_switched|window_focused)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+targeted_sender() {
+  case "${1:-}" in
+    workspace_manual_change|aerospace_workspace_change)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+full_sender() {
+  case "${1:-}" in
+    ""|poll|timer|routine|forced|delayed|workspace_content_change|application_launched|application_terminated|window_created|window_destroyed)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+render_mode_for_sender() {
+  if targeted_sender "$1"; then
+    printf 'targeted\n'
+  elif focus_only_sender "$1"; then
+    printf 'focus-only\n'
+  else
+    printf 'full\n'
+  fi
+}
+
+debounce_delay_for_sender() {
+  if focus_only_sender "$1" || targeted_sender "$1"; then
+    printf '%s\n' "$FOCUS_EVENT_DEBOUNCE_DELAY"
+  else
+    printf '%s\n' "$CONTENT_EVENT_DEBOUNCE_DELAY"
+  fi
+}
 
 # 遅延再走査は、本当に反映が遅れやすいイベントだけに限定する。
 needs_second_pass=0
@@ -125,6 +177,25 @@ fi
 # --- スナップショット取得（失敗時は短い遅延後に再試行） ---
 capture_snapshot() {
   aerospace list-windows --all --format '%{workspace}%{tab}%{window-id}%{tab}%{app-name}' 2>/dev/null || true
+}
+
+capture_workspace_snapshot() {
+  local ws_args=()
+  local ws
+
+  for ws in "$@"; do
+    [ -n "$ws" ] || continue
+    ws_args+=(--workspace "$ws")
+  done
+
+  [ "${#ws_args[@]}" -gt 0 ] || return 0
+  aerospace list-windows "${ws_args[@]}" --format '%{workspace}%{tab}%{window-id}%{tab}%{app-name}' 2>/dev/null || true
+}
+
+capture_hidden_snapshot() {
+  local base_ws="$1"
+  [ -n "$base_ws" ] || return 0
+  aerospace list-windows --workspace "${base_ws}-hidden" --format '%{window-id}%{tab}%{app-name}' 2>/dev/null || true
 }
 
 capture_focused_workspace() {
@@ -187,6 +258,10 @@ parse_info_targets() {
   done
 }
 
+first_info_target() {
+  parse_info_targets | awk 'NR==1 { print; exit }'
+}
+
 # スナップショットからWS IDを抽出（順序維持・重複排除）
 snapshot_workspaces() {
   printf '%s\n' "$WINDOW_SNAPSHOT" | awk -F'\t' '
@@ -222,14 +297,78 @@ build_state_lines() {
   ' <(workspace_list) <(printf '%s\n' "$WINDOW_SNAPSHOT")
 }
 
-run_once() {
+run_focus_only() {
+  local info_target hidden_snapshot
+
+  if [ "${SENDER:-}" = "workspace_manual_change" ]; then
+    info_target="$(first_info_target)"
+  else
+    info_target=""
+  fi
+
+  if [ -n "$info_target" ]; then
+    FOCUSED_WORKSPACE="$info_target"
+  else
+    FOCUSED_WORKSPACE="$(capture_focused_workspace)"
+  fi
+  [ -n "$FOCUSED_WORKSPACE" ] || return 0
+
+  HIDDEN_BASE_WORKSPACE="$(base_workspace "$FOCUSED_WORKSPACE")"
+  hidden_snapshot="$(capture_hidden_snapshot "$HIDDEN_BASE_WORKSPACE")"
+
+  log "Running focus-only update for: $FOCUSED_WORKSPACE"
+  SENDER="${SENDER:-poll}" \
+    DEBUG_LOG="$DEBUG_LOG" \
+    WORKSPACE_RENDER_MODE="focus-only" \
+    FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" \
+    HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" \
+    HIDDEN_SNAPSHOT="$hidden_snapshot" \
+    "$UPDATE_SCRIPT"
+}
+
+run_targeted() {
+  local info_target hidden_snapshot targeted_snapshot
+
+  info_target="$(first_info_target)"
+
+  if [ "${SENDER:-}" = "workspace_manual_change" ] && [ -n "$info_target" ]; then
+    FOCUSED_WORKSPACE="$info_target"
+  else
+    FOCUSED_WORKSPACE="$(capture_focused_workspace)"
+  fi
+  [ -n "$FOCUSED_WORKSPACE" ] || return 0
+
+  HIDDEN_BASE_WORKSPACE="$(base_workspace "$FOCUSED_WORKSPACE")"
+  targeted_snapshot="$(capture_workspace_snapshot "$FOCUSED_WORKSPACE")"
+  hidden_snapshot="$(capture_hidden_snapshot "$HIDDEN_BASE_WORKSPACE")"
+
+  log "Running targeted update for: $FOCUSED_WORKSPACE"
+  SENDER="${SENDER:-poll}" \
+    DEBUG_LOG="$DEBUG_LOG" \
+    WORKSPACE_RENDER_MODE="targeted" \
+    FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" \
+    HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" \
+    HIDDEN_SNAPSHOT="$hidden_snapshot" \
+    WINDOW_SNAPSHOT="$targeted_snapshot" \
+    "$UPDATE_SCRIPT" "$FOCUSED_WORKSPACE"
+}
+
+run_full() {
+  local info_target
+
   WINDOW_SNAPSHOT="$(capture_snapshot)"
   if [ -z "$WINDOW_SNAPSHOT" ]; then
     sleep 0.15
     WINDOW_SNAPSHOT="$(capture_snapshot)"
   fi
   export WINDOW_SNAPSHOT
-  FOCUSED_WORKSPACE="$(capture_focused_workspace)"
+
+  info_target="$(first_info_target)"
+  if [ "${SENDER:-}" = "workspace_manual_change" ] && [ -n "$info_target" ]; then
+    FOCUSED_WORKSPACE="$info_target"
+  else
+    FOCUSED_WORKSPACE="$(capture_focused_workspace)"
+  fi
   HIDDEN_BASE_WORKSPACE="$(base_workspace "$FOCUSED_WORKSPACE")"
   export FOCUSED_WORKSPACE HIDDEN_BASE_WORKSPACE
 
@@ -283,10 +422,22 @@ run_once() {
 
   if [ ${#targets[@]} -eq 0 ]; then
     log "Running update for all workspaces (poll)"
-    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" WINDOW_SNAPSHOT="$WINDOW_SNAPSHOT" "$UPDATE_SCRIPT"
+    SENDER="${SENDER:-poll}" \
+      DEBUG_LOG="$DEBUG_LOG" \
+      WORKSPACE_RENDER_MODE="full" \
+      FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" \
+      HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" \
+      WINDOW_SNAPSHOT="$WINDOW_SNAPSHOT" \
+      "$UPDATE_SCRIPT"
   else
     log "Running update for: ${targets[*]}"
-    SENDER="${SENDER:-poll}" DEBUG_LOG="$DEBUG_LOG" FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" WINDOW_SNAPSHOT="$WINDOW_SNAPSHOT" "$UPDATE_SCRIPT" "${targets[@]}"
+    SENDER="${SENDER:-poll}" \
+      DEBUG_LOG="$DEBUG_LOG" \
+      WORKSPACE_RENDER_MODE="full" \
+      FOCUSED_WORKSPACE="$FOCUSED_WORKSPACE" \
+      HIDDEN_BASE_WORKSPACE="$HIDDEN_BASE_WORKSPACE" \
+      WINDOW_SNAPSHOT="$WINDOW_SNAPSHOT" \
+      "$UPDATE_SCRIPT" "${targets[@]}"
   fi
 
   # --- 起動・破棄系イベントだけ少し遅らせてもう一度（遅延反映バグ対策） ---
@@ -300,6 +451,20 @@ run_once() {
   return 0
 }
 
+run_once() {
+  case "$(render_mode_for_sender "${SENDER:-}")" in
+    targeted)
+      run_targeted
+      ;;
+    focus-only)
+      run_focus_only
+      ;;
+    *)
+      run_full
+      ;;
+  esac
+}
+
 if ! acquire_event_lock; then
   log "Skip: update in progress; pending set"
   [ -n "$DEBUG_LOG" ] && exec 3>&-
@@ -310,8 +475,9 @@ trap cleanup_event_lock EXIT INT TERM
 reruns=0
 while [ "$reruns" -lt "$EVENT_MAX_RERUNS" ]; do
   reruns=$((reruns + 1))
-  if [ -n "$EVENT_DEBOUNCE_DELAY" ] && [ "$EVENT_DEBOUNCE_DELAY" != "0" ]; then
-    sleep "$EVENT_DEBOUNCE_DELAY"
+  CURRENT_DEBOUNCE_DELAY="$(debounce_delay_for_sender "${SENDER:-}")"
+  if [ -n "$CURRENT_DEBOUNCE_DELAY" ] && [ "$CURRENT_DEBOUNCE_DELAY" != "0" ]; then
+    sleep "$CURRENT_DEBOUNCE_DELAY"
   fi
 
   run_once || true

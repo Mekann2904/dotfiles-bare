@@ -17,7 +17,7 @@ fi
 case "${SENDER:-}" in
   ""|poll|timer|routine|forced)
     ;;  # ポーリングや手動実行を許可
-  delayed|aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
+  delayed|workspace_manual_change|workspace_content_change|aerospace_workspace_change|window_created|window_destroyed|application_launched|application_terminated|front_app_switched|window_focused)
     ;;  # イベント実行も許可
   *)
     exit 0
@@ -67,6 +67,8 @@ HIDDEN_ITEM_WIDTH=${HIDDEN_ITEM_WIDTH:-24}
 
 FOCUSED_WORKSPACE="${FOCUSED_WORKSPACE:-}"
 HIDDEN_BASE_WORKSPACE="${HIDDEN_BASE_WORKSPACE:-}"
+HIDDEN_SNAPSHOT="${HIDDEN_SNAPSHOT:-}"
+WORKSPACE_RENDER_MODE="${WORKSPACE_RENDER_MODE:-full}"
 CMD=()
 
 # 区切り文字（アプリ名には通常含まれない制御文字）
@@ -242,21 +244,25 @@ apply_hidden_state() {
     return 0
   fi
 
-  hidden_ws="${HIDDEN_BASE_WORKSPACE}-hidden"
-  hidden_entries="$(
-    printf '%s\n' "$windows" | awk -F'\t' -v target="$hidden_ws" '
-      {
-        ws=$1
-        win_id=$2
-        app=$3
-        sub(/^[[:space:]]+/, "", ws);     sub(/[[:space:]]+$/, "", ws)
-        sub(/^[[:space:]]+/, "", win_id); sub(/[[:space:]]+$/, "", win_id)
-        sub(/^[[:space:]]+/, "", app);    sub(/[[:space:]]+$/, "", app)
-        if (ws != target || win_id == "" || app == "") next
-        print win_id "\t" app
-      }
-    '
-  )"
+  if [ -n "$HIDDEN_SNAPSHOT" ]; then
+    hidden_entries="$HIDDEN_SNAPSHOT"
+  else
+    hidden_ws="${HIDDEN_BASE_WORKSPACE}-hidden"
+    hidden_entries="$(
+      printf '%s\n' "$windows" | awk -F'\t' -v target="$hidden_ws" '
+        {
+          ws=$1
+          win_id=$2
+          app=$3
+          sub(/^[[:space:]]+/, "", ws);     sub(/[[:space:]]+$/, "", ws)
+          sub(/^[[:space:]]+/, "", win_id); sub(/[[:space:]]+$/, "", win_id)
+          sub(/^[[:space:]]+/, "", app);    sub(/[[:space:]]+$/, "", app)
+          if (ws != target || win_id == "" || app == "") next
+          print win_id "\t" app
+        }
+      '
+    )"
+  fi
 
   hidden_count=$(printf '%s\n' "$hidden_entries" | awk 'NF { count++ } END { print count + 0 }')
   CMD+=(--set hidden drawing=off icon.drawing=off label="" label.drawing=off)
@@ -334,61 +340,63 @@ main() {
     done
   fi
 
-  local ws_list=()
-  if [ "${#targets[@]}" -gt 0 ]; then
-    ws_list=("${targets[@]}")
-  else
-    mapfile -t ws_list < <(workspace_list)
-  fi
-
   local windows
-
-  if [ -n "${WINDOW_SNAPSHOT:-}" ]; then
-    windows="$WINDOW_SNAPSHOT"
-    log_debug "Using provided snapshot (${#ws_list[@]} workspaces)"
-  else
-    windows="$(aerospace list-windows --all --format '%{workspace}%{tab}%{window-id}%{tab}%{app-name}' 2>/dev/null)" || windows=""
-    [ -n "$windows" ] || log_debug "Empty snapshot; rendering empty state"
-  fi
-
-  local grouped
-  grouped="$(
-    awk -F'\t' -v sep="$SEP" -v slots="$VISIBLE_ICON_SLOTS" '
-      NR==FNR { order[++n]=$0; want[$0]=1; next }
-      {
-        ws=$1; app=$3
-        sub(/^[[:space:]]+/, "", ws);  sub(/[[:space:]]+$/, "", ws)
-        sub(/^[[:space:]]+/, "", app); sub(/[[:space:]]+$/, "", app)
-        if (ws=="" || app=="" || !(ws in want)) next
-
-        key = ws SUBSEP app
-        if (seen[key]++) next
-
-        cnt[ws]++
-        if (lstn[ws] < slots) {
-          lstn[ws]++
-          if (lst[ws]=="") lst[ws]=app
-          else lst[ws]=lst[ws] sep app
-        }
-      }
-      END {
-        for (i=1; i<=n; i++) {
-          ws=order[i]
-          c=(ws in cnt)?cnt[ws]:0
-          print ws "\t" c "\t" lst[ws]
-        }
-      }
-    ' <(printf '%s\n' "${ws_list[@]}") <(printf '%s\n' "$windows")
-  )"
 
   CMD=("$SKETCHYBAR_BIN")
   apply_focus_state
 
-  local line ws count list
-  while IFS=$'\t' read -r ws count list; do
-    [ -n "$ws" ] || continue
-    update_workspace_icons "$ws" "${count:-0}" "$list"
-  done <<<"$grouped"
+  if [ "$WORKSPACE_RENDER_MODE" != "focus-only" ]; then
+    local ws_list=()
+    if [ "${#targets[@]}" -gt 0 ]; then
+      ws_list=("${targets[@]}")
+    else
+      mapfile -t ws_list < <(workspace_list)
+    fi
+
+    if [ -n "${WINDOW_SNAPSHOT:-}" ]; then
+      windows="$WINDOW_SNAPSHOT"
+      log_debug "Using provided snapshot (${#ws_list[@]} workspaces)"
+    else
+      windows="$(aerospace list-windows --all --format '%{workspace}%{tab}%{window-id}%{tab}%{app-name}' 2>/dev/null)" || windows=""
+      [ -n "$windows" ] || log_debug "Empty snapshot; rendering empty state"
+    fi
+
+    local grouped
+    grouped="$(
+      awk -F'\t' -v sep="$SEP" -v slots="$VISIBLE_ICON_SLOTS" '
+        NR==FNR { order[++n]=$0; want[$0]=1; next }
+        {
+          ws=$1; app=$3
+          sub(/^[[:space:]]+/, "", ws);  sub(/[[:space:]]+$/, "", ws)
+          sub(/^[[:space:]]+/, "", app); sub(/[[:space:]]+$/, "", app)
+          if (ws=="" || app=="" || !(ws in want)) next
+
+          key = ws SUBSEP app
+          if (seen[key]++) next
+
+          cnt[ws]++
+          if (lstn[ws] < slots) {
+            lstn[ws]++
+            if (lst[ws]=="") lst[ws]=app
+            else lst[ws]=lst[ws] sep app
+          }
+        }
+        END {
+          for (i=1; i<=n; i++) {
+            ws=order[i]
+            c=(ws in cnt)?cnt[ws]:0
+            print ws "\t" c "\t" lst[ws]
+          }
+        }
+      ' <(printf '%s\n' "${ws_list[@]}") <(printf '%s\n' "$windows")
+    )"
+
+    local line ws count list
+    while IFS=$'\t' read -r ws count list; do
+      [ -n "$ws" ] || continue
+      update_workspace_icons "$ws" "${count:-0}" "$list"
+    done <<<"$grouped"
+  fi
 
   apply_hidden_state
 

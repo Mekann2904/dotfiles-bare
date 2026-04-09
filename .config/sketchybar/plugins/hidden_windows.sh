@@ -54,8 +54,8 @@ restore_window() {
 
   aerospace move-node-to-workspace --window-id "$win_id" "$ws" 2>/dev/null || exit 0
 
-  # アイコン更新が即時反映されるよう、既存のイベントにフックする。
-  sketchybar --trigger aerospace_workspace_change || true
+  # 内容が変わるので full update を明示的に走らせる。
+  sketchybar --trigger workspace_content_change INFO="$ws" || true
 }
 
 # restore サブコマンド時は即復帰して終了。
