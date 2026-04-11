@@ -30,19 +30,29 @@ if [ ! -f "$WALLPAPER_PATH" ]; then
   exit 1
 fi
 
-escape_for_applescript() {
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
-}
-
-escaped_path=$(escape_for_applescript "$WALLPAPER_PATH")
-
-osascript -e "tell application \"System Events\" to set picture of every desktop to (POSIX file \"$escaped_path\")" >/dev/null 2>&1
+# 全モニターへ確実に反映するため、各 desktop を明示的に更新する。
+apply_output=$(
+  osascript \
+    -e 'on run argv' \
+    -e 'set wallpaperPath to item 1 of argv' \
+    -e 'set wallpaperFile to POSIX file wallpaperPath' \
+    -e 'set appliedCount to 0' \
+    -e 'tell application "System Events"' \
+    -e 'repeat with currentDesktop in desktops' \
+    -e 'set picture of currentDesktop to wallpaperFile' \
+    -e 'set appliedCount to appliedCount + 1' \
+    -e 'end repeat' \
+    -e 'end tell' \
+    -e 'return appliedCount' \
+    -e 'end run' \
+    "$WALLPAPER_PATH" 2>&1
+)
 status=$?
 
 if [ $status -ne 0 ]; then
-  log_debug "osascriptが失敗しました (status=$status)"
+  log_debug "osascriptが失敗しました (status=$status): $apply_output"
 else
-  log_debug "壁紙を切り替えました: $WALLPAPER_PATH"
+  log_debug "壁紙を切り替えました: $WALLPAPER_PATH (${apply_output} desktops)"
 fi
 
 sketchybar --set "$PARENT_ITEM" popup.drawing=off
