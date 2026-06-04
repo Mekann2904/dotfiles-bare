@@ -176,13 +176,17 @@ runAerospace = function(dir, op)
     target = dir
   elseif op == OP_WORKSPACE_NORMAL then
     -- 通常ワークスペース(1-7)のみ巡回
-    target = getNextNormalWorkspace(dir)
-    if not target then
-      resetTaskState()
-      return
-    end
-    execPath = AEROSPACE
-    execArgs = {"workspace", target}
+    -- Alt+Click の体感を元に戻すため、Hammerspoon 側で同期的に次WSを計算せず
+    -- AeroSpace の stdin/wrap-around に非同期タスクとして任せる
+    local cmd = string.format(
+      "%q list-workspaces --monitor focused --format '%%{workspace}' | grep -E '%s' | %q workspace --stdin --wrap-around %s",
+      AEROSPACE,
+      NORMAL_WS_PATTERN,
+      AEROSPACE,
+      dir
+    )
+    execPath = "/bin/bash"
+    execArgs = {"-lc", cmd}
     label = "workspace-normal"
   else
     -- モニター内のワークスペースから次へ/前へ移動
@@ -229,7 +233,7 @@ local function getFocusedMonitor()
   if not fileExists(AEROSPACE) then return MONITOR_FALLBACK end
   local cached = cache.focusedMonitor
   if cacheFresh(cached) then return cached.value end
-  local cmd = string.format("%q list-monitors --focused --format '%%{monitor}'", AEROSPACE)
+  local cmd = string.format("%q list-monitors --focused --format '%%{monitor-id}'", AEROSPACE)
   local out = hs.execute(cmd) or ""
   out = trim(out)
   local value = (out == "") and MONITOR_FALLBACK or out
@@ -595,10 +599,7 @@ altClickTap = hs.eventtap.new({
     else
       runAerospace(ALT_CLICK_MAP.right, OP_WORKSPACE_NORMAL)
     end
-    return true
-  end
-
-  if t == hs.eventtap.event.types.leftMouseDown then
+  elseif t == hs.eventtap.event.types.leftMouseDown then
     if shiftActive then
       if USE_AEROSPACE_HOTKEYS then
         sendAerospaceHotkey(ALT_CLICK_MAP.left, AEROSPACE_HOTKEYS.move_click)
@@ -608,7 +609,6 @@ altClickTap = hs.eventtap.new({
     else
       runAerospace(ALT_CLICK_MAP.left, OP_WORKSPACE_NORMAL)
     end
-    return true
   end
 
   return false
